@@ -55,7 +55,7 @@ export = [
     "weasyprint>=60.0; platform_system!='Windows'",
 ]
 citations = [
-    "bibtexparser>=2.0.0",
+    "bibtexparser>=1.4.0",
 ]
 redis = [
     "redis>=5.0.0",

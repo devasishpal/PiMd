@@ -25,7 +25,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install hatchling
-          pip install -e ".[dev,diagrams,equations,citations,all]"
+          pip install -e ".[dev,diagrams,equations,citations,export,redis,profiling]"
 
       - name: Lint with ruff
         run: ruff check src/ tests/
