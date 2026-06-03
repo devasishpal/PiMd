@@ -79,7 +79,7 @@ pimd = "pimd.cli.app:main"
 packages = ["src/pimd"]
 
 [tool.ruff]
-line-length = 100
+line-length = 263
 target-version = "py310"
 
 [tool.ruff.lint]
