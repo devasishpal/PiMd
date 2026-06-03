@@ -120,8 +120,8 @@ def apply_layout_to_doc(doc: Any, layout: DocumentLayoutConfig | None = None) ->
     """
     cfg = layout or DEFAULT_LAYOUT
     w, h = cfg.page_size_mm()
-    width_emu = int(w / 25.4 * 914400)
-    height_emu = int(h / 25.4 * 914400)
+    width_twips = round(w / 25.4 * 1440)
+    height_twips = round(h / 25.4 * 1440)
     orient = "landscape" if cfg.orientation == PageOrientation.LANDSCAPE else "portrait"
 
     for section in doc.sections:
@@ -130,8 +130,8 @@ def apply_layout_to_doc(doc: Any, layout: DocumentLayoutConfig | None = None) ->
         if pg_sz is None:
             pg_sz = OxmlElement("w:pgSz")
             sect_pr.append(pg_sz)
-        pg_sz.set(qn("w:w"), str(width_emu))
-        pg_sz.set(qn("w:h"), str(height_emu))
+        pg_sz.set(qn("w:w"), str(width_twips))
+        pg_sz.set(qn("w:h"), str(height_twips))
         pg_sz.set(qn("w:orient"), orient)
 
         section.top_margin = Inches(cfg.margins.top)
