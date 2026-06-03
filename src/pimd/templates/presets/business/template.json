@@ -1,0 +1,27 @@
+{
+  "name": "business",
+  "type": "business",
+  "description": "Business template for proposals, contracts, and presentations",
+  "version": "1.0.0",
+  "author": "PiMD",
+  "tags": ["business", "proposal", "contract", "presentation"],
+  "config": {
+    "page_size": "A4",
+    "margin_top": 2.0,
+    "margin_bottom": 2.0,
+    "margin_left": 2.5,
+    "margin_right": 2.5,
+    "default_font": "Arial",
+    "default_font_size": 11,
+    "heading_font": "Arial",
+    "line_spacing": 1.15,
+    "paragraph_spacing": 8.0,
+    "page_numbers": true,
+    "generate_toc": false,
+    "cover_page": true,
+    "header_text": "CONFIDENTIAL",
+    "footer_text": "",
+    "watermark_text": "",
+    "watermark_enabled": false
+  }
+}

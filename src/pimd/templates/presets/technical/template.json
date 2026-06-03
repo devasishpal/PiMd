@@ -1,0 +1,27 @@
+{
+  "name": "technical",
+  "type": "technical",
+  "description": "Technical template for manuals, specifications, and documentation",
+  "version": "1.0.0",
+  "author": "PiMD",
+  "tags": ["manual", "specification", "technical", "documentation"],
+  "config": {
+    "page_size": "A4",
+    "margin_top": 2.0,
+    "margin_bottom": 2.0,
+    "margin_left": 2.0,
+    "margin_right": 2.0,
+    "default_font": "Segoe UI",
+    "default_font_size": 10,
+    "heading_font": "Segoe UI",
+    "line_spacing": 1.0,
+    "paragraph_spacing": 4.0,
+    "page_numbers": true,
+    "generate_toc": true,
+    "cover_page": true,
+    "header_text": "",
+    "footer_text": "",
+    "watermark_text": "",
+    "watermark_enabled": false
+  }
+}

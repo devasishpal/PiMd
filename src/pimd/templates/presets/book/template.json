@@ -1,0 +1,27 @@
+{
+  "name": "book",
+  "type": "book",
+  "description": "Book template with chapters, parts, and print-optimised layout",
+  "version": "1.0.0",
+  "author": "PiMD",
+  "tags": ["book", "chapter", "print", "publish"],
+  "config": {
+    "page_size": "A5",
+    "margin_top": 1.8,
+    "margin_bottom": 1.8,
+    "margin_left": 2.5,
+    "margin_right": 1.5,
+    "default_font": "Georgia",
+    "default_font_size": 11,
+    "heading_font": "Georgia",
+    "line_spacing": 1.5,
+    "paragraph_spacing": 3.0,
+    "page_numbers": true,
+    "generate_toc": true,
+    "cover_page": true,
+    "header_text": "",
+    "footer_text": "",
+    "watermark_text": "",
+    "watermark_enabled": false
+  }
+}

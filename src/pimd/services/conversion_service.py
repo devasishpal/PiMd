@@ -1,0 +1,362 @@
+"""Conversion orchestration service."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+from pimd.caching import CacheBackend
+from pimd.exceptions import ConversionError
+from pimd.models import Document, DocumentStatistics
+from pimd.observability import ConversionMetrics, ConversionReport, Timer
+from pimd.plugins import ConversionHook, PluginManager
+from pimd.renderers.docx_renderer import DocxRenderer
+from pimd.safety import SafetyGuard, SafetyLimits
+from pimd.themes import ProfessionalTheme
+from pimd.themes.base import Theme
+from pimd.utils.logging import get_logger
+
+logger = get_logger(__name__)
+
+
+@dataclass
+class ConversionResult:
+    """Result returned by a conversion operation."""
+
+    output_path: Path | None = None
+    output_bytes: bytes | None = None
+    report: ConversionReport = field(default_factory=ConversionReport)
+    statistics: DocumentStatistics | None = None
+
+
+class ConversionService:
+    """Orchestrates the full parse → render pipeline with observability,
+    caching, safety checks, and plugin hooks.
+
+    This is the single entry point for all conversions in PiMD.
+    The CLI, PiMD class, and future REST APIs all delegate here.
+    """
+
+    def __init__(
+        self,
+        theme: Theme | None = None,
+        cache: CacheBackend | None = None,
+        limits: SafetyLimits | None = None,
+        plugins: PluginManager | None = None,
+    ) -> None:
+        self._theme = theme or ProfessionalTheme()
+        self._renderer = DocxRenderer(self._theme)
+        self._cache = cache
+        self._guard = SafetyGuard(limits)
+        self._plugins = plugins or PluginManager()
+        self._last_report: ConversionReport | None = None
+
+    # ------------------------------------------------------------------
+    # Public API — used by PiMD class and CLI
+    # ------------------------------------------------------------------
+
+    def convert_markdown(
+        self,
+        source: str | Path,
+        *,
+        output_path: str | Path | None = None,
+        generate_toc: bool = False,
+        page_numbers: bool = False,
+        header_text: str | None = None,
+        footer_text: str | None = None,
+        cover_page: bool = False,
+        title: str | None = None,
+        author: str | None = None,
+        company: str | None = None,
+        subject: str | None = None,
+        keywords: list[str] | None = None,
+        doc_version: str | None = None,
+    ) -> ConversionResult:
+        """Convert Markdown source to DOCX.
+
+        Args:
+            source: Markdown text string or file path.
+            output_path: Where to write the DOCX (``None`` = memory mode).
+            **options: Rendering options (TOC, page numbers, etc.).
+
+        Returns:
+            A :class:`ConversionResult` with path and/or bytes.
+        """
+        return self._convert(
+            "markdown",
+            source,
+            output_path=output_path,
+            generate_toc=generate_toc,
+            page_numbers=page_numbers,
+            header_text=header_text,
+            footer_text=footer_text,
+            cover_page=cover_page,
+            title=title,
+            author=author,
+            company=company,
+            subject=subject,
+            keywords=keywords,
+            doc_version=doc_version,
+        )
+
+    def convert_html(
+        self,
+        source: str | Path,
+        *,
+        output_path: str | Path | None = None,
+        generate_toc: bool = False,
+        page_numbers: bool = False,
+        header_text: str | None = None,
+        footer_text: str | None = None,
+        cover_page: bool = False,
+        title: str | None = None,
+        author: str | None = None,
+        company: str | None = None,
+        subject: str | None = None,
+        keywords: list[str] | None = None,
+        doc_version: str | None = None,
+    ) -> ConversionResult:
+        """Convert HTML source to DOCX.
+
+        Args:
+            source: HTML text string or file path.
+            output_path: Where to write the DOCX (``None`` = memory mode).
+            **options: Rendering options (TOC, page numbers, etc.).
+
+        Returns:
+            A :class:`ConversionResult` with path and/or bytes.
+        """
+        return self._convert(
+            "html",
+            source,
+            output_path=output_path,
+            generate_toc=generate_toc,
+            page_numbers=page_numbers,
+            header_text=header_text,
+            footer_text=footer_text,
+            cover_page=cover_page,
+            title=title,
+            author=author,
+            company=company,
+            subject=subject,
+            keywords=keywords,
+            doc_version=doc_version,
+        )
+
+    # ------------------------------------------------------------------
+    # Report access
+    # ------------------------------------------------------------------
+
+    @property
+    def last_report(self) -> ConversionReport | None:
+        """Return the report from the most recent conversion."""
+        return self._last_report
+
+    # ------------------------------------------------------------------
+    # Internal
+    # ------------------------------------------------------------------
+
+    def _get_input_text(self, source: str | Path) -> str:
+        """Read text from a string or file path."""
+        if isinstance(source, Path):
+            path = source
+            self._guard.check_file_size(path)
+            return path.read_text(encoding="utf-8")
+        p = Path(source)
+        if p.is_file() and p.suffix in (".md", ".html", ".markdown", ".htm", ".rst", ".txt"):
+            self._guard.check_file_size(p)
+            return p.read_text(encoding="utf-8")
+        self._guard.check_text_size(source)
+        return source
+
+    def _get_parser(self, fmt: str) -> Any:
+        if fmt == "markdown":
+            from pimd.parsers.markdown_parser import MarkdownParser
+
+            return MarkdownParser()
+        if fmt == "html":
+            from pimd.parsers.html_parser import HTMLParser
+
+            return HTMLParser()
+        raise ConversionError(f"Unknown format: {fmt}")
+
+    def _render_to_path(self, document: Document, output_path: str | Path, **options: Any) -> None:
+        self._renderer.render(document, output_path, **options)
+
+    def _render_to_bytes(self, document: Document, **options: Any) -> bytes:
+        from pimd.renderers.docx_renderer import DocxRenderer as _DocxRenderer
+
+        renderer = _DocxRenderer(self._theme)
+        return renderer.render_to_bytes(document, **options)
+
+    def _convert(
+        self,
+        fmt: str,
+        source: str | Path,
+        *,
+        output_path: str | Path | None = None,
+        **options: Any,
+    ) -> ConversionResult:
+        """Core conversion pipeline."""
+        report = ConversionReport(source_format=fmt)
+        metrics = ConversionMetrics()
+        timer_total = Timer()
+        timer_total.__enter__()
+
+        try:
+            # ---- Plugin: before_convert ----
+            ctx: dict[str, Any] = {"format": fmt, "source": source, "options": options}
+            ctx = self._plugins.dispatch(ConversionHook.BEFORE_CONVERT, ctx)
+
+            # ---- Check cache ----
+            cache_key = None
+            if self._cache:
+                cache_key = self._cache.make_key(
+                    "convert",
+                    fmt,
+                    source=str(source) if not isinstance(source, Path) else str(source.absolute()),
+                    **{k: str(v) for k, v in sorted(options.items()) if v},
+                )
+                cached = self._cache.get(cache_key)
+                if cached is not None:
+                    report.cache_hit = True
+                    report.metrics = cached.get("metrics", metrics)
+                    self._last_report = report
+                    logger.debug("Cache hit for key: %s", cache_key)
+
+                    # If the user wants a file, we need to write it, but we only cached bytes
+                    if output_path and isinstance(cached, dict) and "bytes" in cached:
+                        Path(output_path).write_bytes(cached["bytes"])
+                        return ConversionResult(
+                            output_path=Path(output_path),
+                            output_bytes=cached["bytes"],
+                            report=report,
+                        )
+                    if "result" in cached:
+                        return cached["result"]
+                    return ConversionResult(output_bytes=cached.get("bytes"), report=report)
+
+            # ---- Read input ----
+            source_text = self._get_input_text(source)
+            metrics.input_size = len(source_text.encode("utf-8"))
+
+            # ---- Plugin: before_parse ----
+            source_text = self._plugins.dispatch(
+                ConversionHook.BEFORE_PARSE, source_text, context=ctx
+            )
+
+            # ---- Parse ----
+            with Timer() as parse_timer:
+                parser = self._get_parser(fmt)
+                document = parser.parse(str(source_text))
+            metrics.parse_time = parse_timer.elapsed
+
+            # Check block count
+            self._guard.check_block_count(len(document.blocks))
+
+            # ---- Collect statistics ----
+            statistics = _collect_statistics(document)
+
+            # ---- Plugin: after_parse / before_render ----
+            document = self._plugins.dispatch(ConversionHook.AFTER_PARSE, document, context=ctx)
+            document = self._plugins.dispatch(ConversionHook.BEFORE_RENDER, document, context=ctx)
+
+            # ---- Render ----
+            with Timer() as render_timer:
+                if output_path:
+                    self._render_to_path(document, output_path, **options)
+                else:
+                    docx_bytes = self._render_to_bytes(document, **options)
+            metrics.render_time = render_timer.elapsed
+
+            # Compute final times
+            timer_total.__exit__(None, None, None)
+            metrics.total_time = timer_total.elapsed
+            report.metrics = metrics
+            report.statistics = statistics
+
+            if output_path:
+                metrics.output_size = Path(output_path).stat().st_size
+                result = ConversionResult(
+                    output_path=Path(output_path),
+                    report=report,
+                    statistics=statistics,
+                )
+            else:
+                metrics.output_size = len(docx_bytes)
+                result = ConversionResult(
+                    output_bytes=docx_bytes,
+                    report=report,
+                    statistics=statistics,
+                )
+
+            # ---- Plugin: after_render / after_convert ----
+            self._plugins.dispatch(ConversionHook.AFTER_RENDER, result, context=ctx)
+            self._plugins.dispatch(ConversionHook.AFTER_CONVERT, ctx)
+
+            # ---- Store in cache ----
+            if self._cache and cache_key:
+                cache_data = {
+                    "metrics": metrics,
+                    "bytes": result.output_bytes,
+                    "statistics": statistics,
+                }
+                self._cache.set(cache_key, cache_data)
+
+            self._last_report = report
+            logger.info(
+                "Converted %s in %.2fs (%s blocks)",
+                fmt,
+                metrics.total_time,
+                statistics.total_blocks if statistics else 0,
+            )
+            return result
+
+        except Exception as exc:
+            timer_total.__exit__(None, None, None)
+            metrics.total_time = timer_total.elapsed
+            report.metrics = metrics
+            report.success = False
+            report.error = str(exc)
+            self._last_report = report
+            raise
+
+
+def _collect_statistics(document: Document) -> DocumentStatistics:
+    """Walk the document model and count elements / words."""
+    from pimd.converters.markdown import _count_words
+
+    stats = DocumentStatistics()
+
+    def walk(blocks: list[Any]) -> None:
+        for block in blocks:
+            if isinstance(block, Document):
+                walk(block.blocks)
+            elif hasattr(block, "plain_text"):
+                stats.paragraph_count += 1
+                stats.word_count += _count_words(block.plain_text())
+            elif hasattr(block, "code"):
+                stats.code_block_count += 1
+                stats.word_count += _count_words(block.code)
+            elif hasattr(block, "items"):
+                if hasattr(block, "start"):
+                    stats.list_item_count += len(block.items)
+                else:
+                    stats.list_item_count += len(block.items)
+                for item in block.items:
+                    walk(item.children)
+            elif hasattr(block, "headers"):
+                stats.table_count += 1
+                for h in block.headers:
+                    stats.word_count += _count_words(h)
+                for row in block.rows:
+                    for cell in row:
+                        stats.word_count += _count_words(cell)
+            elif hasattr(block, "children"):
+                walk(block.children)
+            elif hasattr(block, "url") and hasattr(block, "alt"):
+                stats.image_count += 1
+
+    walk(document.blocks)
+    return stats

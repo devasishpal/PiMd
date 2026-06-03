@@ -1,0 +1,27 @@
+{
+  "name": "academic",
+  "type": "academic",
+  "description": "Academic template for theses, papers, and dissertations",
+  "version": "1.0.0",
+  "author": "PiMD",
+  "tags": ["thesis", "paper", "dissertation", "academic"],
+  "config": {
+    "page_size": "A4",
+    "margin_top": 2.54,
+    "margin_bottom": 2.54,
+    "margin_left": 3.18,
+    "margin_right": 3.18,
+    "default_font": "Times New Roman",
+    "default_font_size": 12,
+    "heading_font": "Times New Roman",
+    "line_spacing": 2.0,
+    "paragraph_spacing": 0.0,
+    "page_numbers": true,
+    "generate_toc": true,
+    "cover_page": true,
+    "header_text": "",
+    "footer_text": "",
+    "watermark_text": "",
+    "watermark_enabled": false
+  }
+}
