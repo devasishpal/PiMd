@@ -14,6 +14,8 @@ class ReportType(str, Enum):
     AUDIT = "audit"
     PROJECT = "project"
     RESEARCH = "research"
+    COMPLIANCE = "compliance"
+    ARCHITECTURE = "architecture"
 
 
 @dataclass
@@ -115,6 +117,39 @@ _SECTION_TEMPLATES: dict[ReportType, list[tuple[str, str, list[str]]]] = {
         ("Discussion", "Interpretation of results.", []),
         ("Conclusion", "Summary and future work.", []),
         ("References", "Cited works.", []),
+    ],
+    ReportType.COMPLIANCE: [
+        ("Executive Summary", "Compliance posture overview.", []),
+        ("Scope and Applicability", "Regulatory framework and scope.", []),
+        ("Control Framework", "Controls and safeguards.", [
+            "Access Control",
+            "Data Protection",
+            "Incident Response",
+            "Business Continuity",
+        ]),
+        ("Assessment Results", "Findings per control.", []),
+        ("Gap Analysis", "Identified gaps and remediation.", []),
+        ("Remediation Plan", "Action items with owners and deadlines.", []),
+        ("Conclusion", "Overall compliance status.", []),
+    ],
+    ReportType.ARCHITECTURE: [
+        ("Executive Summary", "Architecture overview and key decisions.", []),
+        ("Context and Goals", "Business drivers and constraints.", []),
+        ("Architecture Principles", "Guiding principles.", []),
+        (
+            "Current State Architecture",
+            "Baseline architecture description.",
+            [
+                "Business Architecture",
+                "Data Architecture",
+                "Application Architecture",
+                "Technology Architecture",
+            ],
+        ),
+        ("Target State Architecture", "Future state vision.", []),
+        ("Gap Analysis", "Transition between states.", []),
+        ("Roadmap", "Migration phases and milestones.", []),
+        ("Recommendations", "Key recommendations.", []),
     ],
 }
 

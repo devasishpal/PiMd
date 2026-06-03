@@ -19,6 +19,7 @@ class WatermarkType(str, Enum):
     CONFIDENTIAL = "CONFIDENTIAL"
     INTERNAL = "INTERNAL"
     DRAFT = "DRAFT"
+    PUBLIC = "PUBLIC"
     CUSTOM = "CUSTOM"
 
 
@@ -39,6 +40,7 @@ _STANDARD_TEXTS: dict[WatermarkType, str] = {
     WatermarkType.CONFIDENTIAL: "CONFIDENTIAL",
     WatermarkType.INTERNAL: "INTERNAL",
     WatermarkType.DRAFT: "DRAFT",
+    WatermarkType.PUBLIC: "PUBLIC",
     WatermarkType.CUSTOM: "",
 }
 

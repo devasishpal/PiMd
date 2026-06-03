@@ -25,13 +25,14 @@ Enterprise features::
     from pimd.config import Config
 """
 
+from pimd.accessibility import AccessibilityEngine, AccessibilityReport
 from pimd.analyzer import AnalysisIssue, AnalysisReport, ProjectAnalyzer
 from pimd.api import PiMD
 from pimd.attachments import Attachment, AttachmentConfig, AttachmentType
 from pimd.batch import BatchProcessor
 from pimd.books import BookCompiler, BookConfig
 from pimd.branding import Brand, BrandConfig, BrandingManager
-from pimd.caching import CacheBackend, MemoryCache
+from pimd.caching import CacheBackend, CacheMetricsCollector, CacheStats, FileSystemCache, MemoryCache
 from pimd.caching.redis_cache import (
     RedisCacheBackend,
     RedisDiagramCache,
@@ -45,7 +46,7 @@ from pimd.citations import CitationEngine, CitationEntry, CitationStyle
 
 # New modules — ecosystem compatibility
 from pimd.compatibility import CompatibilityLayer, FlavorDetectionResult, MarkdownFlavor
-from pimd.config import Config
+from pimd.config import Config, ConfigSchemaEntry
 from pimd.converters.html import HTMLConverter, html_to_docx
 from pimd.converters.markdown import MarkdownConverter
 from pimd.deprecation import deprecate_parameter, deprecated
@@ -72,6 +73,7 @@ from pimd.layout import DEFAULT_LAYOUT, DocumentLayoutConfig, Margins, PageSize
 from pimd.merge import DocumentMerger
 from pimd.mkdocs_ import MkDocsConfig, MkDocsProject, MkDocsProjectConverter
 from pimd.models import DocumentStatistics
+from pimd.observability import BuildMetrics, ConversionReport, ExecutionReport, MetricsCollector, PipelineProfile, Profiler, Timer
 from pimd.obsidian import ObsidianNote, VaultConfig, VaultExporter
 from pimd.parallel import (
     BatchSummary,
@@ -94,15 +96,31 @@ from pimd.pipeline import (
     StageType,
     TransformStage,
 )
+from pimd.plugins import PLUGIN_TYPES, PluginMetadata
 from pimd.profiles import ExportProfile, ProfileManager, ProfileType
-from pimd.profiling import ConversionReport, PipelineProfile, Profiler, Timer
 from pimd.project import ProjectConverter, ProjectResult
 from pimd.recovery import RecoveryContext, RecoveryReport, RecoveryWarning
+from pimd.remote_assets import RemoteAssetConfig, RemoteAssetManager
 from pimd.reports import ReportConfig, ReportEngine, ReportType
 
 # New modules — project-level
 from pimd.repository import RepoResult, RepositoryConfig, RepoType
 from pimd.safety import SafetyError, SafetyGuard, SafetyLimits
+from pimd.sdk import (
+    AssetPlugin,
+    BasePlugin,
+    CitationPlugin,
+    DiagramPlugin,
+    Event,
+    EventBus,
+    ExporterPlugin,
+    Hook,
+    ParserPlugin,
+    PublishingPlugin,
+    RendererPlugin,
+    TemplatePlugin,
+    ValidationPlugin,
+)
 from pimd.sphinx import RSTtoMarkdownConverter, SphinxConfig, SphinxProject, SphinxProjectConverter
 from pimd.streaming import ChunkProcessor, LargeFileHandler, StreamingMarkdownReader
 from pimd.templates import Template, TemplateConfig, TemplateManager, TemplateType
@@ -200,6 +218,9 @@ __all__ = [
     # Cache
     "CacheBackend",
     "MemoryCache",
+    "FileSystemCache",
+    "CacheStats",
+    "CacheMetricsCollector",
     # Jobs
     "JobManager",
     "JobStatus",
@@ -209,6 +230,9 @@ __all__ = [
     "Timer",
     "ConversionReport",
     "PipelineProfile",
+    "BuildMetrics",
+    "ExecutionReport",
+    "MetricsCollector",
     # Project
     "ProjectConverter",
     "ProjectResult",
@@ -220,6 +244,7 @@ __all__ = [
     "IncrementalBuildTracker",
     # Config
     "Config",
+    "ConfigSchemaEntry",
     # Safety
     "SafetyGuard",
     "SafetyLimits",
@@ -277,9 +302,32 @@ __all__ = [
     "ExportProfile",
     "ProfileManager",
     "ProfileType",
+    # Accessibility
+    "AccessibilityEngine",
+    "AccessibilityReport",
+    # Remote Assets
+    "RemoteAssetManager",
+    "RemoteAssetConfig",
+    # Plugin system
+    "PluginMetadata",
+    "PLUGIN_TYPES",
+    # Extension SDK
+    "BasePlugin",
+    "DiagramPlugin",
+    "TemplatePlugin",
+    "CitationPlugin",
+    "RendererPlugin",
+    "ExporterPlugin",
+    "AssetPlugin",
+    "ValidationPlugin",
+    "ParserPlugin",
+    "PublishingPlugin",
+    "Hook",
+    "Event",
+    "EventBus",
 ]
 
-__version__ = "1.1.0"
+__version__ = "2.0.0"
 __author__ = "PiMD Contributors"
 __description__ = "Professional document publishing platform"
 

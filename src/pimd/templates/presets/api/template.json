@@ -1,0 +1,25 @@
+{
+  "name": "api",
+  "type": "api",
+  "description": "API documentation template with endpoints, methods, parameters, responses, and code examples",
+  "version": "1.0.0",
+  "author": "PiMD",
+  "tags": ["api", "documentation", "technical", "developer"],
+  "config": {
+    "page_size": "A4",
+    "margin_top": 2.0,
+    "margin_bottom": 2.0,
+    "margin_left": 2.54,
+    "margin_right": 2.54,
+    "default_font": "Consolas",
+    "default_font_size": 10,
+    "heading_font": "Calibri",
+    "line_spacing": 1.15,
+    "paragraph_spacing": 6.0,
+    "page_numbers": true,
+    "generate_toc": true,
+    "cover_page": true,
+    "header_text": "API Reference",
+    "footer_text": "Confidential"
+  }
+}

@@ -15,6 +15,11 @@ class TemplateType(str, Enum):
     TECHNICAL = "technical"
     BUSINESS = "business"
     BOOK = "book"
+    PROPOSAL = "proposal"
+    INVOICE = "invoice"
+    RESUME = "resume"
+    MANUAL = "manual"
+    API = "api"
     CUSTOM = "custom"
 
 

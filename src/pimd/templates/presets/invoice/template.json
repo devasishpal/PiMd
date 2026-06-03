@@ -1,0 +1,25 @@
+{
+  "name": "invoice",
+  "type": "invoice",
+  "description": "Professional invoice template with header, line items, totals, payment terms, and company details",
+  "version": "1.0.0",
+  "author": "PiMD",
+  "tags": ["invoice", "business", "financial"],
+  "config": {
+    "page_size": "A4",
+    "margin_top": 1.5,
+    "margin_bottom": 1.5,
+    "margin_left": 2.0,
+    "margin_right": 2.0,
+    "default_font": "Calibri",
+    "default_font_size": 10,
+    "heading_font": "Calibri",
+    "line_spacing": 1.0,
+    "paragraph_spacing": 4.0,
+    "page_numbers": false,
+    "generate_toc": false,
+    "cover_page": false,
+    "header_text": "INVOICE",
+    "footer_text": ""
+  }
+}

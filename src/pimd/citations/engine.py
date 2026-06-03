@@ -15,6 +15,7 @@ class CitationStyle(str, Enum):
     IEEE = "ieee"
     MLA = "mla"
     CHICAGO = "chicago"
+    HARVARD = "harvard"
 
 
 @dataclass
@@ -101,6 +102,31 @@ class CitationEntry:
             f"{auth}. {title}. {self.publisher}, {year}." if self.publisher else f"{auth}. {title}."
         )
 
+    def format_harvard(self) -> str:
+        """Format as Harvard (author-date, similar to APA with minor variations)."""
+        auth = self.author if self.author else "Unknown"
+        year = f"({self.year})" if self.year else "(n.d.)"
+        title = self.title if self.title else "Untitled"
+        if self.type == "article":
+            journal = self.journal if self.journal else ""
+            vol = self.volume if self.volume else ""
+            parts = [f"{auth} {year}", title]
+            if journal:
+                parts.append(journal)
+            if vol:
+                parts.append(f"Vol. {vol}")
+            if self.pages:
+                parts.append(f"pp. {self.pages}")
+            return ". ".join(parts) + "."
+        if self.type in ("book", "inbook"):
+            parts = [f"{auth} {year}", title]
+            if self.publisher:
+                parts.append(self.publisher)
+            if self.address:
+                parts.append(self.address)
+            return ". ".join(parts) + "."
+        return f"{auth} {year}. {title}."
+
     def format(self, style: CitationStyle) -> str:
         """Format entry in the given style."""
         style_map = {
@@ -108,6 +134,7 @@ class CitationEntry:
             CitationStyle.IEEE: self.format_ieee,
             CitationStyle.MLA: self.format_mla,
             CitationStyle.CHICAGO: self.format_chicago,
+            CitationStyle.HARVARD: self.format_harvard,
         }
         fmt = style_map.get(style)
         return fmt() if fmt else self.format_apa()
@@ -228,6 +255,8 @@ class CitationEngine:
             return f"({entry.author})" if entry.author else f"[{key}]"
         if style == CitationStyle.CHICAGO:
             return f"{entry.author} {entry.year}" if entry.author and entry.year else f"[{key}]"
+        if style == CitationStyle.HARVARD:
+            return f"{entry.author} ({entry.year})" if entry.author and entry.year else f"[{key}]"
         return f"[{key}]"
 
     def bibliography(self, style: CitationStyle = CitationStyle.APA) -> str:

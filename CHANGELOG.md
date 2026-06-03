@@ -5,6 +5,95 @@ All notable changes to PiMD are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-06-03
+
+### Major Changes
+
+- Version bump to 2.0.0 (breaking changes)
+- Plugin ecosystem overhaul with dedicated Extension SDK (`pimd.sdk`)
+- Cache framework abstraction with filesystem backend (`pimd.caching.filesystem.FileSystemCache`)
+- Configuration system with schema validation and environment variable support (`pimd.config.Config`)
+- Observability consolidation: `pimd.observability` absorbs `pimd.profiling`
+- New accessibility validation engine (`pimd.accessibility`)
+- Remote asset management with SHA256 caching and offline mode (`pimd.remote_assets`)
+- Template inheritance system (`pimd.templates.inheritance`)
+- Watch mode for automatic rebuilds on file changes (`pimd.export.watch`)
+- Multi-file project builds from YAML/JSON/TOML config (`pimd build`)
+- New CLI commands: `plugin`, `cache info`, `config init`, `config validate`, `accessibility`, `build`, `watch`
+
+### New Features
+
+- **Extension SDK** (`pimd.sdk`): 9 typed plugin base classes (`BasePlugin`, `DiagramPlugin`, `TemplatePlugin`, `CitationPlugin`, `RendererPlugin`, `ExporterPlugin`, `AssetPlugin`, `ValidationPlugin`, `ParserPlugin`, `PublishingPlugin`) with `EventBus`, `HookRegistry`, and `HookScope`
+- **FileSystemCache**: JSON-envelope filesystem cache with per-entry TTL, SHA-256 key hashing, and diagnostics
+- **Config schema validation**: `Config.validate()` with typed `ConfigSchemaEntry`, `Config.write_default()`, env var support (`PIMD_*`), dotted key access, TOML serialization
+- **AccessibilityEngine**: WCAG-based document validation checking image alt text (1.1.1), heading hierarchy (2.4.10), table headers (1.3.1), reading order, and document structure; CLI `pimd accessibility check` and `pimd accessibility report`
+- **RemoteAssetManager**: HTTP/HTTPS asset downloads, content-addressable SHA256 caching, offline mode, domain allowlists, MIME-type detection, configurable TTL and size limits
+- **Template inheritance**: `TemplateInheritance` class with chain resolution, deep merge, `create_child()` for deriving templates
+- **Watch mode**: Polling-based directory watcher with optional `watchdog` library support, automatic rebuild on file change
+- **Multi-file project builds**: `pimd build` command supporting YAML/JSON/TOML project configs with chapter/file lists
+- **Plugin CLI**: `pimd plugin install`, `pimd plugin enable`, `pimd plugin disable`, `pimd plugin list`, `pimd plugin doctor`
+- **Cache CLI**: `pimd cache info` with diagnostics and statistics
+- **Config CLI**: `pimd config init` generates default `.pimdconfig`, `pimd config validate` checks against schema
+- **Accessibility CLI**: `pimd accessibility check` (with JSON output and markdown report), `pimd accessibility report`
+- **Assets CLI**: `pimd assets list` for inspecting document attachments and asset files
+- Job system: `pimd job run` and `pimd job list` for tracked background conversions
+- Profiling CLI: `pimd profile run` with `ConversionReport` summary output
+- `AccessibilityReport.to_markdown()` for generating detailed accessibility reports
+- `Config.find_project_root()` for locating project config from any subdirectory
+
+### Improvements
+
+- **Observability consolidation**: `pimd.observability` now unifies `Timer` (context manager + lap support), `Profiler`, `ConversionReport` (combined conversion metadata + profiling), `BuildMetrics`, `ExecutionReport`, `MetricsCollector`
+- **Configuration overhaul**: 5-tier priority (built-in defaults < user global < project < env vars < runtime), `Config.apply_env()`, `Config.to_layout_config()`, `Config.find_config_files()`
+- **Cache framework**: Abstract `CacheBackend` ABC, `CacheStats` dataclass, `MemoryCache` with thread-safe TTL, `FileSystemCache` with JSON serialization, `CacheMetricsCollector`, `diagnose_cache()` helper
+- **CLI improvements**: Rich-formatted tables, step displays, doctor commands for all subsystems
+- **Error handling**: `PiMDDeprecationWarning` category, graceful fallbacks for missing dependencies
+- **Parallel processing**: Max worker configuration via CLI and config, per-feature parallel toggle
+- **Security hardening**: Env-var configurable limits for input size, nesting depth, block count, image size, allowed/blocked paths
+- **Deprecation system**: `@deprecated` decorator and `@deprecate_parameter` decorator for API migration
+- **Export formats**: EPUB, LaTeX, PPTX export support added
+- **Project structure**: Clear separation of concerns with 56 subpackages under `src/pimd/`
+
+### Bug Fixes
+
+- Robust TOML loading with `tomllib`/`tomli` fallback
+- Graceful handling of missing config files
+- `MemoryCache` TTL expiry uses `time.monotonic()` for correctness
+- Config merge does not overwrite existing files on `write_default()`
+- File system cache directory auto-creation with `mkdir(parents=True, exist_ok=True)`
+- Remote asset cache accounts for file age in TTL checking
+- Watch mode handles `KeyboardInterrupt` cleanly
+
+### Deprecations
+
+- `pimd.profiling` is deprecated — use `pimd.observability` instead. The `profiling` module now re-exports from `observability` and will be removed in 3.0.0
+- Legacy project config names `pimd.toml` and `.pimd/config.toml` are deprecated in favor of `.pimdconfig`
+- `profiling` extra in `pyproject.toml` is deprecated — observability metrics are now included in the core package
+
+### Breaking Changes
+
+- Minimum Python version: 3.10 (dropped 3.9 support)
+- `profiling` module renamed to `observability`; imports from `pimd.profiling` still work via re-exports
+- Configuration priority order changed: project-local config now takes priority over user global config
+- `CacheBackend` is now an abstract base class — custom backends must implement `get()`, `set()`, `delete()`, `clear()`
+- `.pimdconfig` is the canonical project config filename; `pimd.toml` and `.pimd/config.toml` are still supported but deprecated
+- `SafetyLimits` interface updated to use env-var-driven configuration
+- `ExportConverter` API revised with unified `convert()` method
+- CLI subcommand reorganization: `diagrams`, `equations`, `template`, `brand`, `report`, `book`, `export` moved to sub-typers
+
+### Internal
+
+- Full type hint coverage across all modules (Python 3.10+ syntax)
+- Ruff linting configured with E, F, I, N, W, UP rule sets
+- Pytest-asyncio with auto mode for async test support
+- Hatchling build backend migration
+- Comprehensive `__all__` exports in all public modules
+- Modular architecture: 56 subpackages, clear separation between API, CLI, services, and engines
+- All diagram renderers consolidated under `pimd.diagrams.renderers`
+- Plugin system separated into `pimd.plugins` (foundation) and `pimd.sdk` (extension API)
+- Template engine extracted to `pimd.templates` with models, manager, loader, and inheritance
+- Branding, layout, and citation engines refactored as standalone services
+
 ## [1.1.0] — 2024-12-03
 
 ### Added
@@ -73,24 +162,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Docusaurus (sidebar parser, versioned docs, JS/TS support)
   - Obsidian (WikiLink parsing, callouts, graph builder, vault exporter)
 - CLI with 50+ commands using Typer + Rich
-  - `pimd md` — convert Markdown to DOCX
-  - `pimd html` — convert HTML to DOCX
-  - `pimd info` — system information
-  - `pimd doctor` — dependency check
-  - `pimd diagrams doctor` — diagram tool check
-  - `pimd equations doctor` — equation tool check
-  - `pimd repo` — repository-level conversion
-  - `pimd batch` — batch conversion
-  - `pimd init` — project initialization
-  - Shell completion
 - Public API: `PiMD` class with sync/async methods
-  - `engine.md_to_docx()`, `engine.html_to_docx()`
-  - `engine.md_text_to_docx()`, `engine.html_text_to_docx()`
-  - `engine.md_text_to_docx_bytes()`, `engine.html_text_to_docx_bytes()`
-  - Async variants of all methods
 - Comprehensive test suite: 600+ tests
 - Documentation: migration guide, performance guide, scaling guide, etc.
 - Support for Python 3.10, 3.11, 3.12, 3.13
 
+[2.0.0]: https://github.com/devasishpal/PiMd/compare/v1.1.0...v2.0.0
 [1.1.0]: https://github.com/devasishpal/PiMd/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/devasishpal/PiMd/releases/tag/v1.0.0

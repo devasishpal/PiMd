@@ -265,6 +265,62 @@ class PiMD:
         return await loop.run_in_executor(None, self.html_text_to_docx_bytes, html_text, **options)
 
     # ======================================================================
+    # Unified convert API — single entry point for all formats
+    # ======================================================================
+
+    def convert(
+        self,
+        input_file: str | Path,
+        output_format: str = "docx",
+        output_file: str | Path | None = None,
+        **options: Any,
+    ) -> ConversionResult:
+        """Convert an input file to any supported format.
+
+        Simple unified API that detects input type and produces
+        the requested output format.
+
+        Args:
+            input_file: Path to the input file (.md, .html, .htm).
+            output_format: Target format (docx, pdf, html, md, txt, rtf, odt).
+            output_file: Optional explicit output path. Auto-derived if omitted.
+            **options: Rendering options passed to the renderer.
+
+        Returns:
+            A :class:`ConversionResult` with path and report.
+
+        Usage::
+
+            engine = PiMD()
+
+            # Simple conversion
+            engine.convert("guide.md", "pdf")
+
+            # Explicit output path
+            engine.convert("guide.md", "docx", "output/report.docx")
+        """
+        from pimd.export import ExportConverter
+
+        inp = Path(input_file)
+        if output_file is None:
+            out_dir = inp.parent
+            out_file = out_dir / f"{inp.stem}.{output_format}"
+        else:
+            out_file = Path(output_file)
+
+        exporter = ExportConverter()
+        export_result = exporter.convert(inp, output_format, out_file, **options)
+
+        if export_result.success:
+            return ConversionResult(
+                output_path=export_result.output_path,
+                report=self._service.last_report or ConversionReport(),
+            )
+        raise ConversionError(
+            export_result.error or f"Conversion to {output_format} failed"
+        )
+
+    # ======================================================================
     # Utilities
     # ======================================================================
 

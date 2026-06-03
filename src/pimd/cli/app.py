@@ -319,16 +319,14 @@ def info() -> None:
 
     from pimd.themes import ProfessionalTheme
 
-    # Gather available themes
-    theme_names = ["ProfessionalTheme"]
-    # We could scan for more, but for now just list the built-in ones
-
     data = {
         "Version": __version__,
         "Python": sys.version.split()[0],
         "Platform": sys.platform,
-        "Supported formats": "Markdown -> DOCX, HTML -> DOCX",
-        "Installed themes": ", ".join(theme_names),
+        "Supported formats": "DOCX, PDF, HTML, MD, RTF, ODT, TXT",
+        "Installed templates": "professional, academic, technical, business, book, proposal, invoice, resume, manual, api",
+        "Report types": "executive, technical, audit, project, research, compliance, architecture",
+        "Citation styles": "APA, IEEE, MLA, Chicago, Harvard",
         "Default theme": ProfessionalTheme().name,
         "Config location": str(import_path("pimd.cli.config").get_config_path()),
     }
@@ -450,8 +448,15 @@ def doctor() -> None:
 
 @app.command(name="version")
 def version_cmd() -> None:
-    """Show PiMD version."""
+    """Show PiMD version and system information."""
+    import platform
+
+    from pimd import __version__
+
     console.print(f"PiMD v{__version__}")
+    console.print(f"  Python: {platform.python_version()} ({platform.architecture()[0]})")
+    console.print(f"  Platform: {platform.system()} {platform.release()}")
+    console.print("  License: MIT")
 
 
 # ======================================================================
@@ -1357,6 +1362,41 @@ def config_path() -> None:
         console.print(f"  {f}")
 
 
+@config_app.command(name="init")
+def config_init(
+    path: Path = typer.Argument(
+        None,
+        help="Output path (default: .pimdconfig in current directory)",
+    ),
+) -> None:
+    """Generate a default configuration file."""
+    show_sub_banner("config init")
+    from pimd.config import Config
+
+    if path is None:
+        path = Path.cwd() / ".pimdconfig"
+    Config.write_default(path)
+    console.print(f"[green]\u2713[/] Default config written to {path}")
+
+
+@config_app.command(name="validate")
+def config_validate() -> None:
+    """Validate the resolved configuration against the schema."""
+    show_sub_banner("config validate")
+    from pimd.config import Config
+
+    cfg = Config()
+    cfg.load_global()
+    cfg.load_project()
+    errors = cfg.validate()
+    if not errors:
+        console.print("[green]\u2713[/] Configuration is valid")
+    else:
+        console.print(f"[red]\u2717[/] Found {len(errors)} configuration error(s):")
+        for err in errors:
+            console.print(f"  [red]-[/] {err}")
+
+
 # ======================================================================
 # pimd pipeline
 # ======================================================================
@@ -1418,6 +1458,18 @@ def cache_status() -> None:
         console.print("[green]\u2713[/] Redis: Connected")
     else:
         console.print("[yellow]\u2717[/] Redis: Not available (using memory)")
+
+
+@cache_app.command(name="info")
+def cache_info() -> None:
+    """Show cache statistics and diagnostics."""
+    show_sub_banner("cache info")
+    from pimd.caching.diagnostics import diagnose_cache, format_cache_info
+    from pimd.caching.memory import MemoryCache
+
+    cache = MemoryCache()
+    info = diagnose_cache(cache)
+    console.print(format_cache_info(info))
 
 
 # ======================================================================
@@ -1729,6 +1781,360 @@ def assets_list(
     console.print(table)
     if len(attachments) > 30:
         console.print(f"... and {len(attachments) - 30} more")
+
+
+# ======================================================================
+# pimd watch
+# ======================================================================
+
+
+@app.command()
+def watch(
+    input_dir: Path = typer.Argument(
+        ...,
+        help="Directory to watch for changes",
+        exists=True,
+        file_okay=False,
+    ),
+    output_dir: Path = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output directory (default: <input>-output)",
+    ),
+    format: str = typer.Option(
+        "docx",
+        "--format",
+        "-f",
+        help="Output format (docx, pdf, html, md, txt)",
+    ),
+    poll: float = typer.Option(
+        1.0,
+        "--poll",
+        help="Poll interval in seconds (only used without watchdog)",
+    ),
+    watchdog: bool = typer.Option(
+        False,
+        "--watchdog",
+        help="Use watchdog library for efficient file monitoring",
+    ),
+) -> None:
+    """Watch a directory and automatically rebuild changed files."""
+    show_sub_banner("watch")
+    from pimd.export.watch import WatchMode
+
+    watcher = WatchMode(
+        poll_interval=poll,
+        output_format=format,
+        output_dir=str(output_dir) if output_dir else None,
+    )
+    try:
+        if watchdog:
+            watcher.use_watchdog(input_dir)
+        else:
+            watcher.run(input_dir, output_dir)
+    except KeyboardInterrupt:
+        watcher.stop()
+
+
+# ======================================================================
+# pimd build
+# ======================================================================
+
+
+@app.command()
+def build(
+    config: Path = typer.Argument(
+        ...,
+        help="Path to project config file (YAML/JSON/TOML)",
+        exists=True,
+        dir_okay=False,
+    ),
+    output: Path = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output path (auto-derived if omitted)",
+    ),
+    format: str = typer.Option(
+        "docx",
+        "--format",
+        "-f",
+        help="Output format",
+    ),
+    workers: int = typer.Option(
+        4,
+        "--workers",
+        "-w",
+        help="Parallel workers for batch builds",
+    ),
+) -> None:
+    """Build a multi-file project from a YAML/JSON/TOML config file."""
+    show_sub_banner("build")
+    import json
+
+    raw = config.read_text(encoding="utf-8")
+    suffix = config.suffix.lower()
+
+    if suffix in (".yaml", ".yml"):
+        import yaml
+        data = yaml.safe_load(raw)
+    elif suffix == ".json":
+        data = json.loads(raw)
+    elif suffix in (".toml", ".tml"):
+        import tomllib
+        data = tomllib.loads(raw)
+    else:
+        display_error("Unsupported config", f"Format '{suffix}' not supported")
+        raise typer.Exit(code=1)
+
+    chapters: list[str] = data.get("chapters", []) or data.get("files", [])
+    if not chapters:
+        display_error("No files", "Config must define 'chapters' or 'files' list")
+        raise typer.Exit(code=1)
+
+    out = Path(output) if output else Path(f"{config.stem}.{format}")
+    if format == "docx":
+        from pimd.merge import DocumentMerger
+
+        merger = DocumentMerger()
+        try:
+            merger.merge(
+                [Path(c) for c in chapters],
+                out,
+                generate_toc=data.get("toc", True),
+                cover_page=data.get("cover", False),
+            )
+            console.print(f"[green]\u2713[/] Project built: {out}")
+        except Exception as exc:
+            display_error("Build failed", str(exc))
+            raise typer.Exit(code=1) from exc
+    else:
+        from pimd.project import ProjectConverter
+
+        pc = ProjectConverter(incremental=True)
+        import shutil
+        import tempfile
+        tmp_dir = Path(tempfile.mkdtemp(prefix="pimd_build_"))
+        try:
+            pc.convert_project(
+                config.parent,
+                out.parent,
+                merge=True,
+                output_format=format,
+            )
+            console.print(f"[green]\u2713[/] Project built: {out}")
+        except Exception as exc:
+            display_error("Build failed", str(exc))
+            raise typer.Exit(code=1) from exc
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+# ======================================================================
+# pimd accessibility
+# ======================================================================
+
+
+accessibility_cmd = typer.Typer(
+    name="accessibility",
+    help="Document accessibility validation and reporting",
+    no_args_is_help=True,
+)
+app.add_typer(accessibility_cmd, name="accessibility")
+
+
+@accessibility_cmd.command(name="check")
+def accessibility_check(
+    input: Path = typer.Argument(
+        ...,
+        help="Input file (.md) to check",
+        exists=True,
+        dir_okay=False,
+    ),
+    report: Path = typer.Option(
+        None,
+        "--report",
+        "-r",
+        help="Write accessibility report to file",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Output as JSON",
+    ),
+) -> None:
+    """Check a document for accessibility issues."""
+    show_sub_banner("accessibility check")
+    from pimd.accessibility import AccessibilityEngine
+
+    engine = AccessibilityEngine()
+    result = engine.validate_file(input)
+
+    from rich.table import Table
+
+    if result.issues:
+        table = Table(title=f"Accessibility Report: {input.name}")
+        table.add_column("Severity", style="bold")
+        table.add_column("Type")
+        table.add_column("WCAG")
+        table.add_column("Message")
+        for issue in result.issues:
+            severity_map = {
+                "error": "[red]ERROR[/]",
+                "warning": "[yellow]WARN[/]",
+                "info": "[cyan]INFO[/]",
+            }
+            sev = severity_map.get(issue.severity.value, "INFO")
+            wcag = issue.wcag_criterion or ""
+            table.add_row(sev, issue.type, wcag, issue.message[:80])
+        console.print(table)
+    console.print(f"\n[bold]Score:[/] {result.score:.0f}/100")
+
+    if report:
+        report.write_text(result.to_markdown(), encoding="utf-8")
+        console.print(f"[green]\u2713[/] Report written to {report}")
+
+    if json_output:
+        import json as _json
+        data = {
+            "valid": result.valid,
+            "score": result.score,
+            "issues": [
+                {
+                    "type": i.type,
+                    "severity": i.severity.value,
+                    "wcag": i.wcag_criterion,
+                    "message": i.message,
+                    "suggestion": i.suggestion,
+                }
+                for i in result.issues
+            ],
+        }
+        console.print(_json.dumps(data, indent=2))
+
+
+@accessibility_cmd.command(name="report")
+def accessibility_report(
+    input: Path = typer.Argument(
+        ...,
+        help="Input file (.md) to analyze",
+        exists=True,
+        dir_okay=False,
+    ),
+    output: Path = typer.Argument(
+        ...,
+        help="Output markdown report path",
+    ),
+) -> None:
+    """Generate a detailed accessibility report in Markdown."""
+    show_sub_banner("accessibility report")
+    from pimd.accessibility import AccessibilityEngine
+
+    engine = AccessibilityEngine()
+    result = engine.validate_file(input)
+    output.write_text(result.to_markdown(), encoding="utf-8")
+    console.print(f"[green]\u2713[/] Accessibility report: {output}")
+    console.print(f"  Score: {result.score:.0f}/100 — {'PASS' if result.valid else 'FAIL'}")
+
+
+# ======================================================================
+# pimd plugin
+# ======================================================================
+
+plugin_app = typer.Typer(
+    name="plugin",
+    help="Plugin management (install, enable, disable, list, doctor)",
+    no_args_is_help=True,
+)
+app.add_typer(plugin_app, name="plugin")
+
+
+@plugin_app.command(name="install")
+def plugin_install(
+    name: str = typer.Argument(..., help="Plugin name or path"),
+) -> None:
+    """Install a plugin by name (entry point) or filesystem path."""
+    show_sub_banner("plugin install")
+    from pimd.plugins import PluginManager
+
+    mgr = PluginManager()
+    try:
+        mgr.install_plugin(name)
+        console.print(f"[green]\u2713[/] Plugin '{name}' installed")
+    except Exception as exc:
+        display_error("Install failed", str(exc))
+
+
+@plugin_app.command(name="enable")
+def plugin_enable(
+    name: str = typer.Argument(..., help="Plugin name to enable"),
+) -> None:
+    """Enable a plugin."""
+    show_sub_banner("plugin enable")
+    from pimd.plugins import PluginManager
+
+    mgr = PluginManager()
+    mgr.enable(name)
+    console.print(f"[green]\u2713[/] Plugin '{name}' enabled")
+
+
+@plugin_app.command(name="disable")
+def plugin_disable(
+    name: str = typer.Argument(..., help="Plugin name to disable"),
+) -> None:
+    """Disable a plugin."""
+    show_sub_banner("plugin disable")
+    from pimd.plugins import PluginManager
+
+    mgr = PluginManager()
+    mgr.disable(name)
+    console.print(f"[yellow]\u2717[/] Plugin '{name}' disabled")
+
+
+@plugin_app.command(name="list")
+def plugin_list() -> None:
+    """List installed plugins."""
+    show_sub_banner("plugin list")
+    from pimd.plugins import PluginManager
+
+    mgr = PluginManager()
+    plugins = mgr.list_plugins()
+    if not plugins:
+        console.print("[yellow]No plugins installed[/]")
+        return
+    table = Table(title=f"Plugins ({len(plugins)})")
+    table.add_column("Name", style="cyan", no_wrap=True)
+    table.add_column("Version", style="green")
+    table.add_column("Type")
+    table.add_column("Enabled")
+    table.add_column("Description")
+    for p in plugins:
+        table.add_row(
+            p.get("name", "?"),
+            p.get("version", "?"),
+            p.get("plugin_type", ""),
+            "[green]Yes[/]" if p.get("enabled") == "True" else "[red]No[/]",
+            p.get("description", ""),
+        )
+    console.print(table)
+
+
+@plugin_app.command(name="doctor")
+def plugin_doctor() -> None:
+    """Run diagnostics on the plugin system."""
+    show_sub_banner("plugin doctor")
+    from pimd.plugins import PluginManager
+
+    mgr = PluginManager()
+    results = mgr.doctor()
+    for r in results:
+        if r.get("status") == "ok":
+            console.print(f"  [green]\u2713[/] {r.get('check', '?')}")
+        elif r.get("status") == "warn":
+            console.print(f"  [yellow]![/] {r.get('check', '?')}: {r.get('message', '')}")
+        else:
+            console.print(f"  [red]\u2717[/] {r.get('check', '?')}: {r.get('message', '')}")
 
 
 # ======================================================================

@@ -1,94 +1,33 @@
 """Diagram plugin interface — lifecycle hooks for diagram rendering.
 
-Third-party plugins can subclass :class:`DiagramPlugin` and register
-with the :class:`DiagramPluginManager` to hook into the diagram
-rendering pipeline at every stage.
+This module re-exports core types from the new SDK-based plugin system
+while maintaining full backward compatibility with existing code.
+
+Usage::
+
+    from pimd.diagrams.plugin import DiagramPlugin, DiagramPluginManager, DiagramHook
 """
 
 from __future__ import annotations
 
-from abc import ABC
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any
-
-from pimd.diagrams.models import DiagramContext, DiagramResult
+from pimd.sdk.base import DiagramHook, DiagramPluginEvent
+from pimd.sdk.base import DiagramPlugin as _SdkDiagramPlugin
 
 
-class DiagramHook(str, Enum):
-    """Diagram pipeline lifecycle hook points."""
-
-    BEFORE_RENDER = "before_render"
-    AFTER_RENDER = "after_render"
-    BEFORE_CACHE = "before_cache"
-    AFTER_CACHE = "after_cache"
-    BEFORE_EMBED = "before_embed"
-    AFTER_EMBED = "after_embed"
-    ON_ERROR = "on_error"
-    ON_FALLBACK = "on_fallback"
-
-
-@dataclass
-class DiagramPluginEvent:
-    """Event data passed to plugin hooks."""
-
-    hook: DiagramHook
-    context: DiagramContext
-    result: DiagramResult | None = None
-    renderer_name: str | None = None
-    error: str | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-
-class DiagramPlugin(ABC):
+class DiagramPlugin(_SdkDiagramPlugin):
     """Abstract base class for diagram plugins.
 
-    Implement any combination of the hook methods. All are optional
-    — the base class provides no-op defaults.
+    Subclass this to hook into the diagram rendering pipeline.
+    Backward-compatible alias — the canonical version lives in
+    :mod:`pimd.sdk.base`.
 
     Usage::
 
         class WatermarkPlugin(DiagramPlugin):
-            def after_render(self, event: DiagramPluginEvent) -> None:
+            def after_render(self, event):
                 # Add watermark to every diagram
                 pass
     """
-
-    name: str = "unnamed"
-    version: str = "0.1.0"
-    description: str = ""
-
-    def before_render(self, event: DiagramPluginEvent) -> DiagramPluginEvent:
-        """Called before a diagram is rendered. May modify the context."""
-        return event
-
-    def after_render(self, event: DiagramPluginEvent) -> DiagramPluginEvent:
-        """Called after a diagram is rendered. May inspect or modify results."""
-        return event
-
-    def before_cache(self, event: DiagramPluginEvent) -> DiagramPluginEvent:
-        """Called before checking the cache. May modify the cache key."""
-        return event
-
-    def after_cache(self, event: DiagramPluginEvent) -> DiagramPluginEvent:
-        """Called after a cache hit/miss. May log or modify."""
-        return event
-
-    def before_embed(self, event: DiagramPluginEvent) -> DiagramPluginEvent:
-        """Called before embedding a diagram into the output document."""
-        return event
-
-    def after_embed(self, event: DiagramPluginEvent) -> DiagramPluginEvent:
-        """Called after embedding into the output document."""
-        return event
-
-    def on_error(self, event: DiagramPluginEvent) -> DiagramPluginEvent:
-        """Called when a diagram renderer raises an error."""
-        return event
-
-    def on_fallback(self, event: DiagramPluginEvent) -> DiagramPluginEvent:
-        """Called when a diagram falls back to a simpler rendering."""
-        return event
 
 
 class DiagramPluginManager:
@@ -100,8 +39,7 @@ class DiagramPluginManager:
         manager.register(WatermarkPlugin())
 
         event = DiagramPluginEvent(hook=DiagramHook.AFTER_RENDER, ...)
-        for event in manager.dispatch(DiagramHook.AFTER_RENDER, event):
-            ...
+        event = manager.dispatch(DiagramHook.AFTER_RENDER, event)
     """
 
     def __init__(self) -> None:
@@ -119,9 +57,9 @@ class DiagramPluginManager:
         """Return metadata for all registered plugins."""
         return [
             {
-                "name": p.name,
-                "version": p.version,
-                "description": p.description,
+                "name": p.metadata.name,
+                "version": p.metadata.version,
+                "description": p.metadata.description,
             }
             for p in self._plugins
         ]
@@ -162,3 +100,11 @@ class DiagramPluginManager:
             event = method(event)
 
         return event
+
+
+__all__ = [
+    "DiagramHook",
+    "DiagramPlugin",
+    "DiagramPluginEvent",
+    "DiagramPluginManager",
+]

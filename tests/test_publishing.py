@@ -239,7 +239,7 @@ class TestReportEngine:
     def test_list_types(self) -> None:
         engine = ReportEngine()
         types = engine.list_types()
-        assert len(types) == 5
+        assert len(types) == 7
 
     def test_generate_creates_file(self, tmp_path: Path) -> None:
         cfg = ReportConfig(

@@ -1,0 +1,25 @@
+{
+  "name": "manual",
+  "type": "manual",
+  "description": "Technical user manual template with chapters, procedures, warnings, and troubleshooting sections",
+  "version": "1.0.0",
+  "author": "PiMD",
+  "tags": ["manual", "technical", "documentation", "user-guide"],
+  "config": {
+    "page_size": "A4",
+    "margin_top": 2.0,
+    "margin_bottom": 2.0,
+    "margin_left": 2.54,
+    "margin_right": 2.54,
+    "default_font": "Segoe UI",
+    "default_font_size": 10,
+    "heading_font": "Segoe UI",
+    "line_spacing": 1.15,
+    "paragraph_spacing": 6.0,
+    "page_numbers": true,
+    "generate_toc": true,
+    "cover_page": true,
+    "header_text": "User Manual",
+    "footer_text": "Confidential"
+  }
+}

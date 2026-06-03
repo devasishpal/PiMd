@@ -1,4 +1,7 @@
-"""Config system — load settings from ``~/.pimd/config.toml``."""
+"""CLI config loader — thin wrapper around :mod:`pimd.config`.
+
+All public functions delegate to the :class:`pimd.config.Config` class.
+"""
 
 from __future__ import annotations
 
@@ -7,8 +10,15 @@ from typing import Any
 
 from pimd.utils.logging import get_logger
 
+__all__ = ["DEFAULT_CONFIG", "get_config_path", "load_config", "write_default_config"]
+
 logger = get_logger(__name__)
 
+_CONFIG_DIR = Path.home() / ".pimd"
+_CONFIG_PATH = _CONFIG_DIR / "config.toml"
+
+# Keep a minimal inline DEFAULT_CONFIG so module-level import works
+# without triggering circular imports through pimd.config.
 DEFAULT_CONFIG: dict[str, Any] = {
     "defaults": {
         "theme": "professional",
@@ -21,54 +31,41 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
 }
 
-_CONFIG_DIR = Path.home() / ".pimd"
-_CONFIG_PATH = _CONFIG_DIR / "config.toml"
-
 
 def _ensure_config_dir() -> None:
     _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def load_config() -> dict[str, Any]:
-    """Load configuration from ``~/.pimd/config.toml``.
-
-    Returns a dictionary with keys merged from the default config.
-    Missing keys are filled from :const:`DEFAULT_CONFIG`.
-    """
-    config: dict[str, Any] = {}
-    for section, values in DEFAULT_CONFIG.items():
-        config.setdefault(section, {})
-        for key, val in values.items():
-            config[section].setdefault(key, val)
-
-    if not _CONFIG_PATH.exists():
-        return config
-
+def _lazy_toml_load(path: Path) -> dict[str, Any]:
+    """Load a TOML file — helper to keep imports lazy."""
     try:
-        import tomllib  # Python 3.11+
+        import tomllib
     except ImportError:
         try:
             import tomli as tomllib  # type: ignore[no-redef]
         except ImportError:
-            logger.debug("tomli not available; skipping config")
-            return config
-
+            return {}
     try:
-        with _CONFIG_PATH.open("rb") as fh:
-            user_config: dict[str, Any] = tomllib.load(fh)
+        with path.open("rb") as fh:
+            return dict(tomllib.load(fh))
+    except Exception:
+        return {}
 
-        for section, values in user_config.items():
-            if section not in config:
-                config[section] = {}
-            if isinstance(values, dict):
-                for key, val in values.items():
-                    config[section][key] = val
-            else:
-                config[section] = values
-    except Exception as exc:
-        logger.debug("Failed to load config: %s", exc)
 
-    return config
+def load_config() -> dict[str, Any]:
+    """Load configuration from ``~/.pimd/config.toml``.
+
+    Returns a dictionary merged from built-in defaults
+    with user settings applied on top.
+    """
+    from pimd.config import Config, ConfigSource
+
+    cfg = Config()
+    if _CONFIG_PATH.exists():
+        data = _lazy_toml_load(_CONFIG_PATH)
+        if data:
+            cfg._sources.append(ConfigSource("user", data, 10))
+    return cfg.resolve()
 
 
 def get_config_path() -> Path:
@@ -76,25 +73,21 @@ def get_config_path() -> Path:
     return _CONFIG_PATH
 
 
-def write_default_config() -> None:
+def write_default_config(path: str | Path | None = None) -> None:
     """Write a default configuration file to disk.
 
+    Uses :meth:`Config.generate_default` for content.
     Does not overwrite an existing file.
     """
-    if _CONFIG_PATH.exists():
-        return
+    from pimd.config import Config, config_to_toml
 
-    _ensure_config_dir()
-    lines = [
-        "[defaults]",
-        'theme = "professional"',
-        'output_directory = ""',
-        'author = ""',
-        'company = ""',
-        "",
-        "[logging]",
-        'level = "INFO"',
-        "",
-    ]
-    _CONFIG_PATH.write_text("\n".join(lines), encoding="utf-8")
-    logger.info("Default config written to %s", _CONFIG_PATH)
+    dest = Path(path) if path else _CONFIG_PATH
+    if dest.exists():
+        return
+    if path is None:
+        _ensure_config_dir()
+    else:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+    defaults = Config.generate_default()
+    dest.write_text(config_to_toml(defaults), encoding="utf-8")
+    logger.info("Default config written to %s", dest)
