@@ -1,68 +1,140 @@
 # Contributing to PiMD
 
-Thank you for considering contributing to PiMD! This document outlines the process and standards.
+Thank you for your interest in contributing to PiMD! This document provides guidelines and instructions for contributing.
 
-## Development Setup
+## Code of Conduct
+
+By participating in this project, you agree to maintain a respectful, inclusive, and harassment-free environment for everyone.
+
+## Getting Started
+
+1. **Fork the repository** on GitHub.
+2. **Clone your fork**: `git clone https://github.com/your-username/PiMd.git`
+3. **Install in development mode**:
+
+   ```bash
+   cd PiMd
+   pip install -e ".[dev,diagrams,equations,citations,export,redis,profiling]"
+   ```
+
+4. **Run the tests** to verify your setup:
+
+   ```bash
+   python -m pytest tests/ -v
+   ```
+
+## Development Workflow
+
+### Branching
+
+- Create a feature branch from `main`: `git checkout -b feature/your-feature-name`
+- Use prefixes: `feature/`, `fix/`, `docs/`, `refactor/`, `test/`
+
+### Code Style
+
+- **Python**: 3.10+ with type hints everywhere
+- **Linting**: We use `ruff` — run before committing:
+
+  ```bash
+  ruff check src/ tests/
+  ```
+
+- **Formatting**: `ruff format` — configure your editor to format on save
+
+### Testing
+
+- **All contributions must include tests**.
+- Run the full test suite:
+
+  ```bash
+  python -m pytest tests/ -v --tb=short
+  ```
+
+- Run a specific test file:
+
+  ```bash
+  python -m pytest tests/test_api.py -v
+  ```
+
+- Run tests with coverage:
+
+  ```bash
+  pip install pytest-cov
+  python -m pytest tests/ --cov=src/pimd
+  ```
+
+### Type Checking
+
+While not enforced by CI, consider using `mypy` for type checking:
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourname/pimd.git
-cd pimd
-
-# Create a virtual environment
-python -m venv .venv
-source .venv/bin/activate  # or `.venv\Scripts\activate` on Windows
-
-# Install in editable mode
-pip install -e ".[dev]"
+pip install mypy
+mypy src/pimd/ --ignore-missing-imports
 ```
 
-## Code Style
+## Architecture Overview
 
-PiMD uses [Ruff](https://docs.astral.sh/ruff/) for linting and formatting:
+PiMD follows a layered architecture:
 
-```bash
-ruff check src/ tests/
-ruff format src/ tests/
+```
+Input (Markdown/HTML)
+    ↓
+Parser → Document Model (dataclasses)
+    ↓
+Pipeline Stages (transform, plugin hooks)
+    ↓
+Renderer (DOCX/HTML)
+    ↓
+Output (.docx file / bytes)
 ```
 
-## Type Checking
+Key design principles:
 
-All code must pass strict type checking:
+- **Library-first**: The `PiMD` class in `pimd/api/pimd.py` is the primary API
+- **Parser → Model → Renderer**: All input formats convert to the shared `Document` model before rendering
+- **Plugin hooks**: Lifecycle hooks at every pipeline stage
+- **Dependency injection**: Caching, plugins, themes injected through constructors
 
-```bash
-mypy src/
-```
+## Adding a New Feature
 
-## Testing
-
-Write tests for all new functionality:
-
-```bash
-pytest
-```
-
-With coverage:
-
-```bash
-pytest --cov=src/pimd
-```
+1. **Open an issue** first to discuss the feature.
+2. **Add a diagram renderer**: Implement `DiagramRenderer` ABC and register with `register_diagram_renderer()`
+3. **Add a parser**: Implement a parser that produces the `Document` model
+4. **Add a renderer**: Implement a renderer that consumes the `Document` model
+5. **Add tests**: Cover success paths, error paths, and edge cases
 
 ## Pull Request Process
 
-1. Ensure all tests pass
-2. Run Ruff and fix any issues
-3. Add tests for new features
-4. Update documentation if needed
-5. Use conventional commit messages
+1. Ensure all tests pass and linting is clean.
+2. Update documentation if needed.
+3. Add a changelog entry in `CHANGELOG.md`.
+4. Submit a PR with a clear description of the changes.
 
-## Project Architecture
+## Project Structure
 
-- `src/pimd/converters/` - High-level conversion orchestration
-- `src/pimd/parsers/` - Input format parsers (Markdown, HTML)
-- `src/pimd/renderers/` - Output format renderers (DOCX)
-- `src/pimd/utils/` - Shared utilities (logging, etc.)
+```
+src/pimd/
+├── api/            — Public API (PiMD class)
+├── cli/            — CLI commands (Typer + Rich)
+├── parsers/        — Input parsers (Markdown, HTML)
+├── renderers/      — Output renderers (DOCX, HTML)
+├── converters/     — High-level converter wrappers
+├── services/       — Business logic layer
+├── models.py       — Core document model
+├── diagrams/       — Diagram rendering engine
+├── equations/      — Equation rendering (LaTeX → OMML)
+├── templates/      — Template system
+├── plugins/        — Plugin framework
+├── themes/         — Theme system
+├── branding/       — Cover pages, watermarks
+├── citations/      — Citation engine
+├── caching/        — Cache backends
+├── pipeline/       — Pipeline engine
+├── safety/         — Safety limits
+├── validation/     — Document validation
+└── config/         — Configuration management
+```
 
-## License
+## Questions?
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
+Open a [GitHub Discussion](https://github.com/devasishpal/PiMd/discussions) or issue.

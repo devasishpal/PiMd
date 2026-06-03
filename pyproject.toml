@@ -69,9 +69,9 @@ all = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourname/pimd"
-Repository = "https://github.com/yourname/pimd"
-Documentation = "https://pimd.readthedocs.io"
+Homepage = "https://github.com/devasishpal/PiMd"
+Repository = "https://github.com/devasishpal/PiMd"
+Documentation = "https://github.com/devasishpal/PiMd#readme"
 
 [project.scripts]
 pimd = "pimd.cli.app:main"

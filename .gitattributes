@@ -1,24 +1,21 @@
-# Auto-detect text files and use LF on all platforms
+# Auto-detect text files
 * text=auto
 
-# Python source files should use LF
-*.py text eol=lf
+# Python
+*.py text diff=python
 
-# Markdown/text files should use LF
-*.md text eol=lf
-*.txt text eol=lf
-*.toml text eol=lf
-*.json text eol=lf
-*.cfg text eol=lf
-*.ini text eol=lf
-*.yml text eol=lf
-*.yaml text eol=lf
+# Markdown
+*.md text
 
-# Binary files
+# Binary
+*.docx binary
 *.png binary
 *.jpg binary
 *.jpeg binary
 *.gif binary
 *.ico binary
-*.pdf binary
-*.docx binary
+*.woff binary
+*.woff2 binary
+*.eot binary
+*.ttf binary
+*.otf binary

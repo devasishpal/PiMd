@@ -468,11 +468,16 @@ class TestDocumentService:
 class TestTemplateService:
     """Verify TemplateService."""
 
-    def test_list_empty(self) -> None:
+    def test_list_builtins(self) -> None:
         from pimd.services import TemplateService
 
         svc = TemplateService()
-        assert svc.list_templates() == []
+        templates = svc.list_templates()
+        assert "professional" in templates
+        assert "technical" in templates
+        assert "academic" in templates
+        assert "business" in templates
+        assert "book" in templates
 
     def test_load_and_get(self, tmp_path: Path) -> None:
         from pimd.services import TemplateService
@@ -482,3 +487,29 @@ class TestTemplateService:
         svc = TemplateService()
         svc.load_template("default", template_file)
         assert svc.get_template_path("default") == template_file
+        assert svc.template_exists("default")
+        assert svc.get_template("default") is not None
+
+    def test_apply_template(self) -> None:
+        from pimd.services import TemplateService
+
+        svc = TemplateService()
+        result = svc.apply_template("professional")
+        assert isinstance(result, dict)
+        assert result.get("page_size") == "A4"
+
+    def test_apply_unknown_template_raises(self) -> None:
+        from pimd.services import TemplateService
+
+        svc = TemplateService()
+        import pytest
+
+        with pytest.raises(ValueError, match="unknown_template"):
+            svc.apply_template("unknown_template")
+
+    def test_apply_template_with_variables(self) -> None:
+        from pimd.services import TemplateService
+
+        svc = TemplateService()
+        result = svc.apply_template("professional", variables={"title": "My Document"})
+        assert isinstance(result, dict)
