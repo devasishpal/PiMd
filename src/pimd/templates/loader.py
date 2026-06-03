@@ -6,8 +6,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-import tomllib
-
 from pimd.templates.models import Template, TemplateConfig, TemplateMetadata, TemplateType
 
 
@@ -36,6 +34,8 @@ def _load_meta(path: Path) -> dict[str, Any] | None:
         if meta_file.is_file():
             raw = meta_file.read_text(encoding="utf-8")
             if ext == ".toml":
+                import tomllib  # Python 3.11+
+
                 return dict(tomllib.loads(raw))
             return dict(json.loads(raw))
     return None
