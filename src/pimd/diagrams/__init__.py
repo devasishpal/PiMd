@@ -2,7 +2,16 @@
 
 from pimd.diagrams.cache import DiagramCache, FileSystemDiagramCache, MemoryDiagramCache
 from pimd.diagrams.engine import DiagramEngine
-from pimd.diagrams.models import DIAGRAM_LANGUAGES, DiagramConfig, DiagramResult, RenderResult
+from pimd.diagrams.models import (
+    DIAGRAM_LANGUAGES,
+    DiagramConfig,
+    DiagramContext,
+    DiagramPlacement,
+    DiagramResult,
+    DiagramScaleMode,
+    RenderResult,
+)
+from pimd.diagrams.plugin import DiagramHook, DiagramPlugin, DiagramPluginEvent, DiagramPluginManager
 from pimd.diagrams.registry import (
     DiagramRegistry,
     get_diagram_renderer,
@@ -16,6 +25,13 @@ __all__ = [
     "DiagramResult",
     "RenderResult",
     "DiagramConfig",
+    "DiagramContext",
+    "DiagramScaleMode",
+    "DiagramPlacement",
+    "DiagramPlugin",
+    "DiagramPluginEvent",
+    "DiagramPluginManager",
+    "DiagramHook",
     "DIAGRAM_LANGUAGES",
     "DiagramCache",
     "MemoryDiagramCache",

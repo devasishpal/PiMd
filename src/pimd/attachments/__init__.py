@@ -758,3 +758,94 @@ def process_attachments(
     updated_text = _MARKDOWN_IMAGE_RE.sub(_replace_md_image, updated_text)
 
     return (updated_text, attachments)
+
+
+# ======================================================================
+# Asset cache — SHA256-based content-addressable storage
+# ======================================================================
+
+
+class AssetCache:
+    """Content-addressable asset cache using SHA256 hashing.
+
+    Deduplicates identical assets (images, fonts, etc.) across documents.
+    Stores cached data in a directory tree keyed by the first two hex
+    characters of the SHA256 hash (shard-based layout).
+
+    Usage::
+
+        cache = AssetCache(cache_dir=Path("./.pimd-asset-cache"))
+
+        # Store an asset, get back its content hash
+        sha = cache.store(Path("logo.png"))
+
+        # Retrieve by content hash
+        cached_path = cache.get(sha)  # Path | None
+
+        # Check if content already cached (dedup)
+        if cache.contains(sha):
+            print("Already cached, reusing")
+    """
+
+    def __init__(self, cache_dir: str | Path | None = None) -> None:
+        self._cache_dir = Path(cache_dir or Path.home() / ".pimd" / "asset-cache")
+        self._cache_dir.mkdir(parents=True, exist_ok=True)
+
+    def _sha256(self, data: bytes) -> str:
+        import hashlib
+
+        return hashlib.sha256(data).hexdigest()
+
+    def _shard_path(self, sha: str) -> Path:
+        return self._cache_dir / sha[:2] / sha
+
+    def store_bytes(self, data: bytes, suffix: str = ".bin") -> str:
+        """Store raw bytes in the cache. Returns the SHA256 content hash."""
+        sha = self._sha256(data)
+        dest = self._shard_path(sha)
+        if not dest.exists():
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(data)
+        return sha
+
+    def store(self, path: str | Path) -> str:
+        """Store a file in the cache. Returns the SHA256 content hash."""
+        data = Path(path).read_bytes()
+        return self.store_bytes(data, Path(path).suffix)
+
+    def get(self, sha: str) -> Path | None:
+        """Return the cached path for a content hash, or ``None``."""
+        path = self._shard_path(sha)
+        return path if path.exists() else None
+
+    def get_bytes(self, sha: str) -> bytes | None:
+        """Return cached bytes for a content hash, or ``None``."""
+        path = self.get(sha)
+        return path.read_bytes() if path else None
+
+    def contains(self, sha: str) -> bool:
+        """Check if a content hash is already cached."""
+        return self.get(sha) is not None
+
+    def clear(self) -> None:
+        """Remove all cached assets."""
+        import shutil
+
+        for child in self._cache_dir.iterdir():
+            if child.is_dir():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+
+    @property
+    def cache_dir(self) -> Path:
+        return self._cache_dir
+
+    @property
+    def size(self) -> int:
+        """Total number of cached assets across all shards."""
+        total = 0
+        for shard in self._cache_dir.iterdir():
+            if shard.is_dir():
+                total += sum(1 for _ in shard.iterdir())
+        return total

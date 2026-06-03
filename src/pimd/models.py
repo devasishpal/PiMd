@@ -146,6 +146,20 @@ class EquationBlock:
         return text + "]"
 
 
+try:
+    from pimd.callouts import CalloutBlock as Callout
+except ImportError:
+    from dataclasses import dataclass as _dataclass
+
+    @_dataclass
+    class Callout:
+        type: object = None  # type: ignore
+        title: str = ""
+        content_lines: list[str] = field(default_factory=list)
+        color: str = ""
+        icon: str = ""
+
+
 Block = (
     Heading
     | Paragraph
@@ -159,6 +173,7 @@ Block = (
     | Image
     | Diagram
     | EquationBlock
+    | Callout
 )
 
 

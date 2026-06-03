@@ -3,7 +3,69 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any
+
+
+class DiagramScaleMode(str, Enum):
+    """How a diagram should be scaled to fit the page."""
+
+    FIT_WIDTH = "fit_width"
+    FIT_HEIGHT = "fit_height"
+    FIT_PAGE = "fit_page"
+    ORIGINAL = "original"
+    CUSTOM = "custom"
+
+
+class DiagramPlacement(str, Enum):
+    """Where a diagram should be placed on the page."""
+
+    INLINE = "inline"
+    CENTER = "center"
+    FLOAT_LEFT = "float_left"
+    FLOAT_RIGHT = "float_right"
+    PAGE_BREAK = "page_break"
+
+
+@dataclass
+class DiagramContext:
+    """Rich context passed through the diagram rendering pipeline.
+
+    Carries configuration, source metadata, plugin state, and results.
+    Designed for extensibility — third-party plugins can attach custom
+    data via the *metadata* dict.
+    """
+
+    source: str
+    language: str | None = None
+    config: DiagramConfig | None = None
+    scale_mode: DiagramScaleMode = DiagramScaleMode.FIT_WIDTH
+    placement: DiagramPlacement = DiagramPlacement.CENTER
+    custom_width: int | None = None
+    custom_height: int | None = None
+    caption: str | None = None
+    label: str | None = None
+    figure_number: int | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    result: DiagramResult | None = None
+    renderer_name: str | None = None
+    plugin_data: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def resolved_width(self) -> int:
+        if self.custom_width:
+            return self.custom_width
+        if self.config:
+            return self.config.default_width
+        return 600
+
+    @property
+    def resolved_height(self) -> int:
+        if self.custom_height:
+            return self.custom_height
+        if self.config:
+            return self.config.default_height
+        return 400
 
 
 @dataclass

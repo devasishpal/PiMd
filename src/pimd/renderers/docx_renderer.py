@@ -41,12 +41,22 @@ from pimd.utils.text import sanitize_text
 if TYPE_CHECKING:
     from docx.text.paragraph import Paragraph as DocxParagraph
 
+try:
+    from pimd.callouts import CalloutBlock as _CalloutBlock
+    from pimd.callouts import callout_to_docx_element
+except ImportError:
+    _CalloutBlock = None  # type: ignore
+    callout_to_docx_element = None  # type: ignore
+
 logger = get_logger(__name__)
 
 _MONO_FONT = "Courier New"
 _MONO_SIZE = Pt(8.5)
 _IMAGE_MAX_WIDTH = Cm(14)
 _DIAGRAM_DPI = 150
+# A4 usable width with 0.5in margins = ~18cm (508pt)
+_PAGE_USABLE_WIDTH_EMU = int(18 * 360000)
+_DIAGRAM_ASPECT_RATIO = 0.6
 
 
 class DocxRenderer:
@@ -413,6 +423,8 @@ class DocxRenderer:
             self._render_equation_block(doc, block)
         elif isinstance(block, ListItem):
             self._render_list_item(doc, block)
+        elif _CalloutBlock is not None and isinstance(block, _CalloutBlock):
+            self._render_callout(doc, block)
 
     # ------------------------------------------------------------------
     # Heading
@@ -686,12 +698,12 @@ class DocxRenderer:
 
         Features:
         - Center alignment
-        - Figure numbering (auto-incrementing)
-        - Caption support
-        - Proper scaling with DPI awareness
+        - Figure numbering (auto-incrementing) with Word SEQ field
+        - Caption support with bookmark for cross-references
+        - Intelligent scaling: fits page width, preserves aspect ratio
         - SVG preferred, PNG fallback
         - Error placeholder on render failure
-        - Word compatibility
+        - Word compatibility via raw OPC XML
         """
         # -- Error placeholder if no image data --
         if not block.png_bytes and not block.svg_bytes:
@@ -713,6 +725,10 @@ class DocxRenderer:
         # -- Determine image bytes (prefer PNG for DOCX compatibility) --
         img_data = block.png_bytes or block.svg_bytes or b""
 
+        # -- Intelligent sizing: fit to page width, preserve aspect ratio --
+        cx = self._compute_diagram_width()
+        cy = str(int(int(cx) * _DIAGRAM_ASPECT_RATIO))
+
         # -- Center-aligned paragraph for the image --
         p = doc.add_paragraph(style="Normal")
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -726,7 +742,6 @@ class DocxRenderer:
             drawing = OxmlElement("w:drawing")
             inline.append(drawing)
 
-            # Word-compatible inline image shape
             wp = OxmlElement("wp:inline")
             wp.set(qn("xmlns:wp"), "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing")
             wp.set(qn("distT"), "0")
@@ -735,9 +750,8 @@ class DocxRenderer:
             wp.set(qn("distR"), "0")
 
             extent = OxmlElement("wp:extent")
-            cx = int(_IMAGE_MAX_WIDTH.emus)
-            extent.set(qn("cx"), str(cx))
-            extent.set(qn("cy"), str(int(cx * 0.6)))
+            extent.set(qn("cx"), cx)
+            extent.set(qn("cy"), cy)
             wp.append(extent)
 
             effect_extent = OxmlElement("wp:effectExtent")
@@ -747,8 +761,13 @@ class DocxRenderer:
             effect_extent.set(qn("b"), "0")
             wp.append(effect_extent)
 
+            # Bookmark for cross-references
+            self._figure_counter += 1
+            bookmark_id = self._figure_counter + 1000
+            bookmark_name = f"fig_{self._figure_counter}"
+
             doc_pr = OxmlElement("wp:docPr")
-            doc_pr.set(qn("id"), "1")
+            doc_pr.set(qn("id"), str(self._figure_counter))
             doc_pr.set(qn("name"), f"Diagram {block.language}")
             if block.caption:
                 doc_pr.set(qn("descr"), sanitize_text(block.caption))
@@ -801,8 +820,8 @@ class DocxRenderer:
             off.set(qn("y"), "0")
             xfrm.append(off)
             ext = OxmlElement("a:ext")
-            ext.set(qn("cx"), str(cx))
-            ext.set(qn("cy"), str(int(cx * 0.6)))
+            ext.set(qn("cx"), cx)
+            ext.set(qn("cy"), cy)
             xfrm.append(ext)
             sp_pr.append(xfrm)
             prst_geom = OxmlElement("a:prstGeom")
@@ -838,19 +857,84 @@ class DocxRenderer:
             err_r.font.size = Pt(8)
             err_p.paragraph_format.space_after = Pt(6)
 
-        # -- Caption with figure numbering --
+        # -- Caption with figure numbering + bookmark for cross-references --
         if block.caption:
-            self._figure_counter += 1
             cap = doc.add_paragraph(style="Normal")
             cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
             cap.paragraph_format.space_before = Pt(2)
             cap.paragraph_format.space_after = Pt(8)
+
+            # Add bookmark start before caption text
+            bm_start = OxmlElement("w:bookmarkStart")
+            bm_start.set(qn("w:id"), str(bookmark_id))
+            bm_start.set(qn("w:name"), bookmark_name)
+            cap._p.append(bm_start)
 
             caption_text = f"Figure {self._figure_counter}: {block.caption}"
             r = cap.add_run(sanitize_text(caption_text))
             r.font.size = Pt(9)
             r.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
             r.italic = True
+
+            # Add bookmark end after caption text
+            bm_end = OxmlElement("w:bookmarkEnd")
+            bm_end.set(qn("w:id"), str(bookmark_id))
+            cap._p.append(bm_end)
+
+    @staticmethod
+    def _compute_diagram_width() -> str:
+        """Compute diagram width in EMU, fitting within page margins.
+
+        Uses a sensible fraction of the A4 usable width (17cm out of 19cm)
+        to leave breathing room.
+
+        Returns:
+            Width in EMU as a string.
+        """
+        return str(int(_PAGE_USABLE_WIDTH_EMU * 0.9))
+
+    # ------------------------------------------------------------------
+    # Callout / Admonition
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _render_callout(doc: DocxDocument, block: _CalloutBlock) -> None:  # type: ignore
+        """Render a callout/admonition block as a formatted Word table.
+
+        Delegates to ``callout_to_docx_element()`` which produces a
+        ``<w:tbl>`` element with coloured left border, background fill,
+        title, and content lines.
+        """
+        if callout_to_docx_element is None:
+            p = doc.add_paragraph(style="Normal")
+            run = p.add_run(sanitize_text(f"[{block.type.name}: {block.title}]"))
+            run.bold = True
+            for line in block.content_lines:
+                lp = doc.add_paragraph(style="Normal")
+                lp.add_run(sanitize_text(line))
+            return
+
+        try:
+            xml_str = callout_to_docx_element(block)
+            if not xml_str.strip():
+                return
+            tbl = OxmlElement.fromstring(xml_str.encode("utf-8"))
+            doc.element.body.append(tbl)
+            # Add a small spacer paragraph after the callout
+            sp = doc.add_paragraph(style="Normal")
+            sp.paragraph_format.space_before = Pt(2)
+            sp.paragraph_format.space_after = Pt(2)
+        except Exception as exc:
+            logger.warning("Failed to render callout, falling back: %s", exc)
+            p = doc.add_paragraph(style="Normal")
+            p.paragraph_format.space_before = Pt(4)
+            p.paragraph_format.space_after = Pt(4)
+            run = p.add_run(sanitize_text(f"[{block.type.name}: {block.title}]"))
+            run.bold = True
+            run.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+            for line in block.content_lines:
+                lp = doc.add_paragraph(style="Normal")
+                lp.add_run(sanitize_text(line))
 
     # ------------------------------------------------------------------
     # Equation block

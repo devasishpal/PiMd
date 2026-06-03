@@ -8,9 +8,22 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from pimd.diagrams.cache import DiagramCache, MemoryDiagramCache
-from pimd.diagrams.models import AUTO_DETECT_PATTERNS, DIAGRAM_LANGUAGES, DiagramConfig, DiagramResult
+from pimd.diagrams.models import (
+    AUTO_DETECT_PATTERNS,
+    DIAGRAM_LANGUAGES,
+    DiagramConfig,
+    DiagramContext,
+    DiagramResult,
+)
 from pimd.diagrams.registry import DiagramRegistry
 from pimd.utils.logging import get_logger
+
+try:
+    from pimd.diagrams.plugin import DiagramHook, DiagramPluginEvent, DiagramPluginManager
+except ImportError:
+    DiagramPluginManager = None  # type: ignore
+    DiagramHook = None  # type: ignore
+    DiagramPluginEvent = None  # type: ignore
 
 logger = get_logger(__name__)
 
@@ -34,10 +47,16 @@ class DiagramEngine:
         registry: DiagramRegistry | None = None,
         cache: DiagramCache | None = None,
         config: DiagramConfig | None = None,
+        plugin_manager: DiagramPluginManager | None = None,
     ) -> None:
         self._registry = registry or DiagramRegistry()
         self._cache = cache or MemoryDiagramCache()
         self._config = config or DiagramConfig()
+        self._plugin_manager = plugin_manager
+
+    @property
+    def plugin_manager(self) -> DiagramPluginManager | None:
+        return self._plugin_manager
 
     @property
     def registry(self) -> DiagramRegistry:
@@ -123,6 +142,8 @@ class DiagramEngine:
         If *language* is ``None``, auto-detection is attempted.
 
         Checks cache first, then dispatches to the appropriate renderer.
+        Integrates with :class:`DiagramPluginManager` if configured.
+
         On failure, returns a ``DiagramResult`` with ``error`` set (never
         raises).
         """
@@ -141,42 +162,118 @@ class DiagramEngine:
                     render_time=elapsed,
                 )
 
-        # Try cache
+        # Build context for plugins
+        context = DiagramContext(
+            source=source,
+            language=language,
+            config=self._config,
+            caption=options.get("caption"),
+            label=options.get("label"),
+        )
+
+        # Plugin: before_render
+        if self._plugin_manager and DiagramHook:
+            event = DiagramPluginEvent(
+                hook=DiagramHook.BEFORE_RENDER,
+                context=context,
+            )
+            event = self._plugin_manager.dispatch(DiagramHook.BEFORE_RENDER, event)
+            context = event.context
+
+        # Try cache (plugin: before_cache)
         cache_key = DiagramCache.make_key(source, language)
+        if self._plugin_manager and DiagramHook:
+            cache_event = DiagramPluginEvent(
+                hook=DiagramHook.BEFORE_CACHE,
+                context=context,
+            )
+            self._plugin_manager.dispatch(DiagramHook.BEFORE_CACHE, cache_event)
+
         cached = self._cache.get(cache_key)
         if cached is not None:
             cached.cached = True
             cached.render_time = time.monotonic() - start
             logger.debug("Cache hit for %s diagram", language)
+            # Plugin: after_cache
+            if self._plugin_manager and DiagramHook:
+                hit_event = DiagramPluginEvent(
+                    hook=DiagramHook.AFTER_CACHE,
+                    context=context,
+                    result=cached,
+                )
+                self._plugin_manager.dispatch(DiagramHook.AFTER_CACHE, hit_event)
             return cached
+
+        # Plugin: after_cache (miss)
+        if self._plugin_manager and DiagramHook:
+            miss_event = DiagramPluginEvent(
+                hook=DiagramHook.AFTER_CACHE,
+                context=context,
+            )
+            self._plugin_manager.dispatch(DiagramHook.AFTER_CACHE, miss_event)
 
         # Find renderer
         renderer = self._registry.get(language)
         if renderer is None:
             elapsed = time.monotonic() - start
-            return DiagramResult(
+            result = DiagramResult(
                 source=source,
                 language=language,
                 error=f"No renderer registered for language '{language}'",
                 render_time=elapsed,
             )
+            # Plugin: on_error
+            if self._plugin_manager and DiagramHook:
+                err_event = DiagramPluginEvent(
+                    hook=DiagramHook.ON_ERROR,
+                    context=context,
+                    result=result,
+                    error=result.error,
+                )
+                self._plugin_manager.dispatch(DiagramHook.ON_ERROR, err_event)
+            return result
 
         # Render
         if not renderer.is_available():
             elapsed = time.monotonic() - start
-            return DiagramResult(
+            result = DiagramResult(
                 source=source,
                 language=language,
                 error=f"Renderer '{renderer.name}' is not available "
                 f"(tool not installed: {renderer._tool_name()})",
                 render_time=elapsed,
             )
+            # Plugin: on_fallback
+            if self._plugin_manager and DiagramHook:
+                fallback_event = DiagramPluginEvent(
+                    hook=DiagramHook.ON_FALLBACK,
+                    context=context,
+                    result=result,
+                    renderer_name=renderer.name,
+                )
+                self._plugin_manager.dispatch(DiagramHook.ON_FALLBACK, fallback_event)
+            return result
 
         try:
             result = renderer.render(source, **options)
             result.source = source
             result.language = language
             result.render_time = time.monotonic() - start
+
+            # Update context with result
+            context.result = result
+            context.renderer_name = renderer.name
+
+            # Plugin: after_render
+            if self._plugin_manager and DiagramHook:
+                after_event = DiagramPluginEvent(
+                    hook=DiagramHook.AFTER_RENDER,
+                    context=context,
+                    result=result,
+                    renderer_name=renderer.name,
+                )
+                after_event = self._plugin_manager.dispatch(DiagramHook.AFTER_RENDER, after_event)
+                result = after_event.result or result
 
             # Cache the result
             if result.success and self._config.cache:
@@ -191,12 +288,23 @@ class DiagramEngine:
         except Exception as exc:
             elapsed = time.monotonic() - start
             logger.exception("Failed to render %s diagram", language)
-            return DiagramResult(
+            result = DiagramResult(
                 source=source,
                 language=language,
                 error=f"Rendering failed: {exc}",
                 render_time=elapsed,
             )
+            # Plugin: on_error
+            if self._plugin_manager and DiagramHook:
+                err_event = DiagramPluginEvent(
+                    hook=DiagramHook.ON_ERROR,
+                    context=context,
+                    result=result,
+                    error=str(exc),
+                    renderer_name=renderer.name if renderer else None,
+                )
+                self._plugin_manager.dispatch(DiagramHook.ON_ERROR, err_event)
+            return result
 
     # ------------------------------------------------------------------
     # Batch rendering (parallel)
