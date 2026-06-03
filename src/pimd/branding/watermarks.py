@@ -10,6 +10,8 @@ from docx import Document as DocxDocument
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
+from pimd.utils.text import sanitize_text
+
 
 class WatermarkType(str, Enum):
     """Standard watermark types."""
@@ -88,7 +90,7 @@ def _add_watermark_to_header(header: Any, text: str, config: WatermarkConfig) ->
         r.append(rpr)
         t = OxmlElement("w:t")
         t.set(qn("xml:space"), "preserve")
-        t.text = text
+        t.text = sanitize_text(text)
         r.append(t)
 
         wp = OxmlElement("w:p")

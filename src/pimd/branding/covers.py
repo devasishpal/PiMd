@@ -12,6 +12,7 @@ from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
 
 from pimd.branding.models import Brand
+from pimd.utils.text import sanitize_text
 
 
 @dataclass
@@ -80,7 +81,7 @@ def create_cover_page(
 
     title_p = doc.add_paragraph()
     title_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    title_run = title_p.add_run(config.title or "Document Title")
+    title_run = title_p.add_run(sanitize_text(config.title or "Document Title"))
     title_run.font.size = Pt(config.title_size)
     title_run.font.bold = True
     try:
@@ -96,7 +97,7 @@ def create_cover_page(
         _add_vertical_space(doc, 1)
         sub_p = doc.add_paragraph()
         sub_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        sub_run = sub_p.add_run(config.subtitle)
+        sub_run = sub_p.add_run(sanitize_text(config.subtitle))
         sub_run.font.size = Pt(config.subtitle_size)
         try:
             sub_run.font.color.rgb = RGBColor(
@@ -126,7 +127,7 @@ def create_cover_page(
         _add_vertical_space(doc, 3)
         class_p = doc.add_paragraph()
         class_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        class_run = class_p.add_run(config.classification.upper())
+        class_run = class_p.add_run(sanitize_text(config.classification.upper()))
         class_run.font.size = Pt(14)
         class_run.font.bold = True
         try:
@@ -149,10 +150,10 @@ def create_cover_page(
     for label, value in meta_items:
         mp = doc.add_paragraph()
         mp.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        mr = mp.add_run(f"{label}: ")
+        mr = mp.add_run(sanitize_text(f"{label}: "))
         mr.font.size = Pt(config.meta_size)
         mr.font.bold = True
-        vr = mp.add_run(value)
+        vr = mp.add_run(sanitize_text(value))
         vr.font.size = Pt(config.meta_size)
 
     doc.add_page_break()

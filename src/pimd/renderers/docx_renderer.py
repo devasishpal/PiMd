@@ -36,6 +36,7 @@ from pimd.safety import SafetyGuard
 from pimd.themes import ProfessionalTheme
 from pimd.themes.base import Theme
 from pimd.utils.logging import get_logger
+from pimd.utils.text import sanitize_text
 
 if TYPE_CHECKING:
     from docx.text.paragraph import Paragraph as DocxParagraph
@@ -241,7 +242,7 @@ class DocxRenderer:
         # -- Title --
         p = doc.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = p.add_run(title or "Untitled Document")
+        run = p.add_run(sanitize_text(title or "Untitled Document"))
         run.font.size = Pt(36)
         run.bold = True
         run.font.color.rgb = RGBColor(0x1A, 0x1A, 0x2E)
@@ -253,7 +254,7 @@ class DocxRenderer:
         if author:
             p = doc.add_paragraph()
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            run = p.add_run(f"By {author}")
+            run = p.add_run(sanitize_text(f"By {author}"))
             run.font.size = Pt(16)
 
         # -- Version / Date --
@@ -266,7 +267,7 @@ class DocxRenderer:
         today = date.today().strftime("%B %d, %Y")
         parts.append(today)
 
-        run = p.add_run("  \u2022  ".join(parts))
+        run = p.add_run(sanitize_text("  \u2022  ".join(parts)))
         run.font.size = Pt(12)
         run.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
 
@@ -318,7 +319,7 @@ class DocxRenderer:
         header = section.header
         header.is_linked_to_previous = False
         p = header.paragraphs[0]
-        p.text = text
+        p.text = sanitize_text(text)
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     @staticmethod
@@ -326,7 +327,7 @@ class DocxRenderer:
         footer = section.footer
         footer.is_linked_to_previous = False
         p = footer.paragraphs[0]
-        p.text = text
+        p.text = sanitize_text(text)
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     @staticmethod
@@ -411,7 +412,7 @@ class DocxRenderer:
 
     def _render_heading(self, block: Heading) -> None:
         level = min(max(block.level, 1), 6)
-        text = block.plain_text()
+        text = sanitize_text(block.plain_text())
         self._doc.add_heading(text, level=level)
 
     # ------------------------------------------------------------------
@@ -432,15 +433,16 @@ class DocxRenderer:
                 p._p.append(span.omml)
                 continue
 
+            text = sanitize_text(span.text)
             if span.link_url:
-                DocxRenderer._add_hyperlink(p, span.text, span.link_url)
+                DocxRenderer._add_hyperlink(p, text, span.link_url)
             elif span.code:
-                run = p.add_run(span.text)
+                run = p.add_run(text)
                 run.font.name = _MONO_FONT
                 run.font.size = _MONO_SIZE
                 run.font.color.rgb = RGBColor(0xE0, 0x3E, 0x2D)
             else:
-                run = p.add_run(span.text)
+                run = p.add_run(text)
                 run.bold = span.bold
                 run.italic = span.italic
                 if span.underline:
@@ -474,7 +476,7 @@ class DocxRenderer:
         run_props.append(sz)
 
         run_elem.append(run_props)
-        run_elem.text = text
+        run_elem.text = sanitize_text(text)
         hyperlink.append(run_elem)
         paragraph._p.append(hyperlink)
 
@@ -489,7 +491,7 @@ class DocxRenderer:
         except KeyError:
             p = doc.add_paragraph()
 
-        run = p.add_run(block.code)
+        run = p.add_run(sanitize_text(block.code))
         run.font.name = _MONO_FONT
         run.font.size = _MONO_SIZE
         run.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
@@ -549,10 +551,10 @@ class DocxRenderer:
 
                 if first:
                     if ordered:
-                        run = p.add_run(f"{index}. ")
+                        run = p.add_run(sanitize_text(f"{index}. "))
                     else:
                         bullets = ["\u2022", "\u25cb", "\u25a0"]
-                        run = p.add_run(f"{bullets[level % 3]} ")
+                        run = p.add_run(sanitize_text(f"{bullets[level % 3]} "))
                     run.font.size = Pt(10)
                     first = False
 
@@ -596,7 +598,7 @@ class DocxRenderer:
         if has_header:
             for col_idx, text in enumerate(block.headers):
                 cell = table.rows[0].cells[col_idx]
-                cell.text = text
+                cell.text = sanitize_text(text)
                 tc_props = cell._tc.get_or_add_tcPr()
                 shading = OxmlElement("w:shd")
                 shading.set(qn("w:fill"), "1A1A2E")
@@ -612,7 +614,7 @@ class DocxRenderer:
             for col_idx, text in enumerate(row_data):
                 if col_idx < num_cols:
                     cell = table.rows[row_idx].cells[col_idx]
-                    cell.text = text
+                    cell.text = sanitize_text(text)
             row_idx += 1
 
         doc.add_paragraph()
@@ -648,7 +650,7 @@ class DocxRenderer:
         except Exception:
             logger.warning("Image path blocked (security): %s", block.url)
             p = doc.add_paragraph(style="Normal")
-            run = p.add_run(f"[Image: {block.alt}]")
+            run = p.add_run(sanitize_text(f"[Image: {block.alt}]"))
             run.italic = True
             run.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
             return
@@ -657,7 +659,7 @@ class DocxRenderer:
         if not path.exists():
             logger.warning("Image not found, skipping: %s", block.url)
             p = doc.add_paragraph(style="Normal")
-            run = p.add_run(f"[Image: {block.alt}]")
+            run = p.add_run(sanitize_text(f"[Image: {block.alt}]"))
             run.italic = True
             run.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
             return
@@ -680,14 +682,14 @@ class DocxRenderer:
         except Exception as exc:
             logger.warning("Failed to embed diagram: %s", exc)
             p = doc.add_paragraph(style="Normal")
-            run = p.add_run(f"[Diagram: {block.alt}]")
+            run = p.add_run(sanitize_text(f"[Diagram: {block.alt}]"))
             run.italic = True
             run.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
 
         if block.caption:
             cap = doc.add_paragraph(style="Normal")
             cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            r = cap.add_run(block.caption)
+            r = cap.add_run(sanitize_text(block.caption))
             r.font.size = Pt(9)
             r.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
             r.italic = True
@@ -708,11 +710,11 @@ class DocxRenderer:
 
         # Fallback — show LaTeX source (SVG embedding requires future enhancement)
         elif block.error:
-            run = p.add_run(f"[Equation Error: {block.error}]")
+            run = p.add_run(sanitize_text(f"[Equation Error: {block.error}]"))
             run.italic = True
             run.font.color.rgb = RGBColor(0xCC, 0x00, 0x00)
         else:
-            run = p.add_run(f"[Equation: {block.latex[:60]}]")
+            run = p.add_run(sanitize_text(f"[Equation: {block.latex[:60]}]"))
             run.italic = True
             run.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
 
@@ -720,7 +722,7 @@ class DocxRenderer:
         if block.number is not None:
             p2 = doc.add_paragraph(style="Normal")
             p2.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            r = p2.add_run(f"({block.number})")
+            r = p2.add_run(sanitize_text(f"({block.number})"))
             r.font.size = Pt(9)
             r.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
 

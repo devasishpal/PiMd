@@ -26,6 +26,7 @@ from pimd.equations.models import (
     LATEX_GREEK_MAP,
     LATEX_SYMBOL_MAP,
 )
+from pimd.utils.text import sanitize_text
 
 # ---------------------------------------------------------------------------
 # Tokenizer
@@ -87,7 +88,7 @@ def _mk_run(text: str, italic: bool = True) -> Any:
         r.append(rPr)
     t = _m("t")
     t.set(qn("xml:space"), "preserve")
-    t.text = text
+    t.text = sanitize_text(text)
     r.append(t)
     return r
 
@@ -102,7 +103,7 @@ def _mk_run_bold(text: str) -> Any:
     r.append(rPr)
     t = _m("t")
     t.set(qn("xml:space"), "preserve")
-    t.text = text
+    t.text = sanitize_text(text)
     r.append(t)
     return r
 
