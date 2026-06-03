@@ -280,28 +280,28 @@ PiMD follows a layered architecture with clear separation of concerns:
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                    CLI Layer                         │
-│   pimd md, pimd html, pimd build, pimd watch ...   │
+│                    CLI Layer                        │
+│   pimd md, pimd html, pimd build, pimd watch ...    │
 ├─────────────────────────────────────────────────────┤
-│                   API Layer                          │
-│              PiMD class, convert()                   │
+│                   API Layer                         │
+│              PiMD class, convert()                  │
 ├─────────────────────────────────────────────────────┤
-│                Service Layer                         │
+│                Service Layer                        │
 │    ConversionService, DocumentService, TemplateService│
 ├─────────────────────────────────────────────────────┤
-│               Pipeline Layer                         │
+│               Pipeline Layer                        │
 │     Parse → Transform → Render → Export + Hooks     │
 ├─────────────────────────────────────────────────────┤
-│  Parsers  │  Renderers  │  Engines  │  Plugins       │
-│  Markdown │  DOCX       │  Diagram  │  Conversion    │
-│  HTML     │  PDF        │  Equation │  Lifecycle     │
-│           │  HTML       │  Template │  Extension     │
-│           │  TXT        │  Citation │                │
+│  Parsers  │  Renderers  │  Engines  │  Plugins      │
+│  Markdown │  DOCX       │  Diagram  │  Conversion   │
+│  HTML     │  PDF        │  Equation │  Lifecycle    │
+│           │  HTML       │  Template │  Extension    │
+│           │  TXT        │  Citation │               │
 ├─────────────────────────────────────────────────────┤
-│              Domain Model Layer                      │
+│              Domain Model Layer                     │
 │    Document, Block, Span, Heading, Table, Image...  │
 ├─────────────────────────────────────────────────────┤
-│           Infrastructure Layer                       │
+│           Infrastructure Layer                      │
 │  Cache (memory/fs/redis) │ Safety │ Observability   │
 │  Config │ Incremental │ Parallel │ Streaming        │
 └─────────────────────────────────────────────────────┘
