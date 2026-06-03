@@ -8,6 +8,42 @@ if TYPE_CHECKING:
     from pimd.diagrams.renderers.base import DiagramRenderer
 
 
+_REGISTRY_INSTANCE: DiagramRegistry | None = None
+
+
+def _get_global_registry() -> DiagramRegistry:
+    global _REGISTRY_INSTANCE
+    if _REGISTRY_INSTANCE is None:
+        _REGISTRY_INSTANCE = DiagramRegistry()
+    return _REGISTRY_INSTANCE
+
+
+def register_diagram_renderer(language: str, renderer: DiagramRenderer) -> None:
+    """Register a third-party diagram renderer.
+
+    This is the public plugin API for registering custom diagram renderers
+    without modifying PiMD core code.
+
+    Usage::
+
+        from pimd import register_diagram_renderer
+
+        register_diagram_renderer("customdsl", CustomRenderer())
+    """
+    renderer.language = language
+    _get_global_registry().register(renderer)
+
+
+def get_diagram_renderer(language: str) -> DiagramRenderer | None:
+    """Look up a renderer by language from the global registry."""
+    return _get_global_registry().get(language)
+
+
+def list_diagram_renderers() -> list[dict[str, str]]:
+    """List all registered renderers from the global registry."""
+    return _get_global_registry().list_renderers()
+
+
 class DiagramRegistry:
     """Registry of all available diagram renderers.
 

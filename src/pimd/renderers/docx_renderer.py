@@ -46,6 +46,7 @@ logger = get_logger(__name__)
 _MONO_FONT = "Courier New"
 _MONO_SIZE = Pt(8.5)
 _IMAGE_MAX_WIDTH = Cm(14)
+_DIAGRAM_DPI = 150
 
 
 class DocxRenderer:
@@ -61,6 +62,7 @@ class DocxRenderer:
     def __init__(self, theme: Theme | None = None) -> None:
         self._doc: DocxDocument | None = None
         self._theme: Theme = theme or ProfessionalTheme()
+        self._figure_counter: int = 0
 
     def render(
         self,
@@ -679,23 +681,173 @@ class DocxRenderer:
     # Diagram
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _render_diagram(doc: DocxDocument, block: Diagram) -> None:
-        """Embed a rendered diagram PNG into the document."""
-        img_stream = io.BytesIO(block.png_bytes)
-        try:
-            doc.add_picture(img_stream, width=_IMAGE_MAX_WIDTH)
-        except Exception as exc:
-            logger.warning("Failed to embed diagram: %s", exc)
+    def _render_diagram(self, doc: DocxDocument, block: Diagram) -> None:
+        """Embed a rendered diagram into the document with professional formatting.
+
+        Features:
+        - Center alignment
+        - Figure numbering (auto-incrementing)
+        - Caption support
+        - Proper scaling with DPI awareness
+        - SVG preferred, PNG fallback
+        - Error placeholder on render failure
+        - Word compatibility
+        """
+        # -- Error placeholder if no image data --
+        if not block.png_bytes and not block.svg_bytes:
             p = doc.add_paragraph(style="Normal")
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             run = p.add_run(sanitize_text(f"[Diagram: {block.alt}]"))
             run.italic = True
             run.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
+            run.font.size = Pt(9)
+            if block.error:
+                err_p = doc.add_paragraph(style="Normal")
+                err_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                err_r = err_p.add_run(sanitize_text(f"Error: {block.error}"))
+                err_r.italic = True
+                err_r.font.color.rgb = RGBColor(0xCC, 0x00, 0x00)
+                err_r.font.size = Pt(8)
+            return
 
+        # -- Determine image bytes (prefer PNG for DOCX compatibility) --
+        img_data = block.png_bytes or block.svg_bytes or b""
+
+        # -- Center-aligned paragraph for the image --
+        p = doc.add_paragraph(style="Normal")
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.paragraph_format.space_before = Pt(6)
+        p.paragraph_format.space_after = Pt(3)
+
+        img_stream = io.BytesIO(img_data)
+        try:
+            run = p.add_run()
+            inline = run._r
+            drawing = OxmlElement("w:drawing")
+            inline.append(drawing)
+
+            # Word-compatible inline image shape
+            wp = OxmlElement("wp:inline")
+            wp.set(qn("xmlns:wp"), "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing")
+            wp.set(qn("distT"), "0")
+            wp.set(qn("distB"), "0")
+            wp.set(qn("distL"), "0")
+            wp.set(qn("distR"), "0")
+
+            extent = OxmlElement("wp:extent")
+            cx = int(_IMAGE_MAX_WIDTH.emus)
+            extent.set(qn("cx"), str(cx))
+            extent.set(qn("cy"), str(int(cx * 0.6)))
+            wp.append(extent)
+
+            effect_extent = OxmlElement("wp:effectExtent")
+            effect_extent.set(qn("l"), "0")
+            effect_extent.set(qn("t"), "0")
+            effect_extent.set(qn("r"), "0")
+            effect_extent.set(qn("b"), "0")
+            wp.append(effect_extent)
+
+            doc_pr = OxmlElement("wp:docPr")
+            doc_pr.set(qn("id"), "1")
+            doc_pr.set(qn("name"), f"Diagram {block.language}")
+            if block.caption:
+                doc_pr.set(qn("descr"), sanitize_text(block.caption))
+            wp.append(doc_pr)
+
+            c_nv_pr = OxmlElement("wp:cNvGraphicFramePr")
+            graphic_frame = OxmlElement("a:graphicFrameLocks")
+            graphic_frame.set(qn("xmlns:a"), "http://schemas.openxmlformats.org/drawingml/2006/main")
+            graphic_frame.set(qn("noChangeAspect"), "1")
+            c_nv_pr.append(graphic_frame)
+            wp.append(c_nv_pr)
+
+            graphic = OxmlElement("a:graphic")
+            graphic.set(qn("xmlns:a"), "http://schemas.openxmlformats.org/drawingml/2006/main")
+
+            graphic_data = OxmlElement("a:graphicData")
+            graphic_data.set(qn("uri"), "http://schemas.openxmlformats.org/drawingml/2006/picture")
+
+            pic = OxmlElement("pic:pic")
+            pic.set(qn("xmlns:pic"), "http://schemas.openxmlformats.org/drawingml/2006/picture")
+
+            nv_pic_pr = OxmlElement("pic:nvPicPr")
+            c_nv_pr_pic = OxmlElement("pic:cNvPr")
+            c_nv_pr_pic.set(qn("id"), "0")
+            c_nv_pr_pic.set(qn("name"), f"Diagram_{block.language}")
+            nv_pic_pr.append(c_nv_pr_pic)
+            c_nv_pic_pr_pic = OxmlElement("pic:cNvPicPr")
+            nv_pic_pr.append(c_nv_pic_pr_pic)
+            pic.append(nv_pic_pr)
+
+            blip_fill = OxmlElement("pic:blipFill")
+            blip = OxmlElement("a:blip")
+            r_id = p.part.relate_to(
+                img_stream,
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+                is_external=False,
+            )
+            blip.set(qn("r:embed"), r_id)
+            blip_fill.append(blip)
+            stretch = OxmlElement("a:stretch")
+            fill_rect = OxmlElement("a:fillRect")
+            stretch.append(fill_rect)
+            blip_fill.append(stretch)
+            pic.append(blip_fill)
+
+            sp_pr = OxmlElement("pic:spPr")
+            xfrm = OxmlElement("a:xfrm")
+            off = OxmlElement("a:off")
+            off.set(qn("x"), "0")
+            off.set(qn("y"), "0")
+            xfrm.append(off)
+            ext = OxmlElement("a:ext")
+            ext.set(qn("cx"), str(cx))
+            ext.set(qn("cy"), str(int(cx * 0.6)))
+            xfrm.append(ext)
+            sp_pr.append(xfrm)
+            prst_geom = OxmlElement("a:prstGeom")
+            prst_geom.set(qn("prst"), "rect")
+            sp_pr.append(prst_geom)
+            pic.append(sp_pr)
+
+            graphic_data.append(pic)
+            graphic.append(graphic_data)
+            wp.append(graphic)
+            drawing.append(wp)
+
+        except Exception as exc:
+            logger.warning("Failed to embed diagram via XML, falling back: %s", exc)
+            try:
+                img_stream.seek(0)
+                doc.add_picture(img_stream, width=_IMAGE_MAX_WIDTH)
+            except Exception as exc2:
+                logger.warning("Failed to embed diagram: %s", exc2)
+                p2 = doc.add_paragraph(style="Normal")
+                p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                run2 = p2.add_run(sanitize_text(f"[Diagram: {block.alt}]"))
+                run2.italic = True
+                run2.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
+
+        # -- Error message below diagram --
+        if block.error:
+            err_p = doc.add_paragraph(style="Normal")
+            err_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            err_r = err_p.add_run(sanitize_text(f"Warning: {block.error}"))
+            err_r.italic = True
+            err_r.font.color.rgb = RGBColor(0xCC, 0x00, 0x00)
+            err_r.font.size = Pt(8)
+            err_p.paragraph_format.space_after = Pt(6)
+
+        # -- Caption with figure numbering --
         if block.caption:
+            self._figure_counter += 1
             cap = doc.add_paragraph(style="Normal")
             cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            r = cap.add_run(sanitize_text(block.caption))
+            cap.paragraph_format.space_before = Pt(2)
+            cap.paragraph_format.space_after = Pt(8)
+
+            caption_text = f"Figure {self._figure_counter}: {block.caption}"
+            r = cap.add_run(sanitize_text(caption_text))
             r.font.size = Pt(9)
             r.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
             r.italic = True

@@ -223,41 +223,45 @@ class ConversionService:
     def _process_diagrams(self, document: Document) -> None:
         if not self._diagram_engine:
             return
-        registry = self._diagram_engine.registry
+        engine = self._diagram_engine
+        registry = engine.registry
         new_blocks: list[Block] = []
         for block in document.blocks:
             if isinstance(block, CodeBlock):
                 lang = block.language
+
+                # Try auto-detection if no language hint
+                if lang is None or lang not in registry:
+                    detected = engine.detect_language(block.code, hint=lang)
+                    if detected and detected in registry:
+                        lang = detected
+
                 if lang and lang in registry:
-                    result = self._diagram_engine.render(block.code, lang)
-                    if result.png:
+                    result = engine.render(block.code, lang)
+                    if result.success:
                         new_blocks.append(
                             Diagram(
                                 alt=f"{lang} diagram",
-                                png_bytes=result.png,
+                                png_bytes=result.png or b"",
+                                svg_bytes=result.svg.encode("utf-8") if result.svg else None,
                                 source=block.code,
                                 language=lang,
-                                caption=lang,
+                                caption=lang.title(),
+                                error=result.error,
                             )
                         )
                     else:
                         logger.warning(
                             "Diagram rendering failed for %s: %s", lang, result.error
                         )
-                        new_blocks.append(block)
-                elif lang is None and _looks_like_ascii_diagram(block.code):
-                    result = self._diagram_engine.render(block.code, "ascii")
-                    if result.png:
                         new_blocks.append(
                             Diagram(
-                                alt="ASCII diagram",
-                                png_bytes=result.png,
+                                alt=f"{lang} diagram",
                                 source=block.code,
-                                language="ascii",
+                                language=lang or "unknown",
+                                error=result.error or "Rendering failed",
                             )
                         )
-                    else:
-                        new_blocks.append(block)
                 else:
                     new_blocks.append(block)
             else:
@@ -462,11 +466,16 @@ def _collect_statistics(document: Document) -> DocumentStatistics:
 def _default_diagram_engine() -> Any:
     from pimd.diagrams import DiagramEngine, DiagramRegistry
     from pimd.diagrams.renderers import (
+        ActDiagRenderer,
         AsciiRenderer,
+        BlockDiagRenderer,
         D2Renderer,
         GraphvizRenderer,
         MermaidRenderer,
+        NwDiagRenderer,
+        PacketDiagRenderer,
         PlantUMLRenderer,
+        SeqDiagRenderer,
         SvgRenderer,
     )
 
@@ -478,6 +487,11 @@ def _default_diagram_engine() -> Any:
         D2Renderer,
         AsciiRenderer,
         SvgRenderer,
+        BlockDiagRenderer,
+        SeqDiagRenderer,
+        ActDiagRenderer,
+        NwDiagRenderer,
+        PacketDiagRenderer,
     ):
         renderer = renderer_cls()
         if renderer.is_available():

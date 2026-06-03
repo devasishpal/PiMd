@@ -74,6 +74,15 @@ BUILTIN_DEFAULTS: dict[str, Any] = {
         "margin_left": 0.5,
         "margin_right": 0.5,
     },
+    "diagram": {
+        "cache": True,
+        "svg_preferred": True,
+        "max_width": 6.5,
+        "figure_captions": True,
+        "auto_number": True,
+        "detect_diagrams": True,
+        "default_dpi": 150,
+    },
 }
 
 

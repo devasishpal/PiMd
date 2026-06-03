@@ -5,7 +5,7 @@
 ```ascii
   Markdown ──┐
               ├──► PiMD ──► Professional .docx
-  HTML ───────┘              ├── Diagrams (Mermaid, PlantUML, Graphviz, ASCII…)
+  HTML ───────┘              ├── Diagrams (Mermaid, PlantUML, Graphviz, BlockDiag, Vega…)
                              ├── Equations (LaTeX → editable OMML)
                              ├── Themes & Templates
                              ├── Brand identity
@@ -28,43 +28,85 @@
 Render diagrams directly from code blocks — no screenshots, no manual exports:
 
 ```ascii
-  ┌─────────────┐    ┌──────────────┐    ┌──────────┐
-  │ Mermaid     │    │ PlantUML     │    │ Graphviz │
-  │ graph/seq/  │    │ sequence/    │    │ DOT lang │
-  │ gantt/etc.  │    │ use case/    │    │          │
-  └──────┬──────┘    └──────┬───────┘    └────┬─────┘
-         │                  │                  │
-         └──────────────────┼──────────────────┘
+  ┌─────────────┐    ┌──────────────┐    ┌──────────┐    ┌──────────┐
+  │ Mermaid     │    │ PlantUML     │    │ Graphviz │    │ BlockDiag │
+  │ graph/seq/  │    │ sequence/    │    │ DOT lang │    │ family   │
+  │ gantt/etc.  │    │ use case/    │    │          │    │ (5 tools)│
+  └──────┬──────┘    └──────┬───────┘    └────┬─────┘    └────┬─────┘
+         │                  │                  │              │
+         └──────────────────┼──────────────────┼──────────────┘
                             ▼
-              ┌─────────────────────────┐
-              │  DiagramEngine          │
-              │  • Caching (mem/Redis)  │
-              │  • Parallel rendering   │
-              │  • Fallback to code     │
-              └────────────┬────────────┘
+              ┌─────────────────────────────────┐
+              │  DiagramEngine                  │
+              │  • Auto-detection (no tags)     │
+              │  • SHA256 content-hash caching  │
+              │  • Parallel rendering           │
+              │  • SVG preferred / PNG fallback │
+              └────────────┬────────────────────┘
                            ▼
-              ┌─────────────────────────┐
-              │   Embedded PNG in DOCX  │
-              └─────────────────────────┘
+              ┌─────────────────────────────────┐
+              │   DOCX embedding                │
+              │   • Center-aligned              │
+              │   • Figure numbering            │
+              │   • Captions                    │
+              │   • Error placeholders          │
+              └─────────────────────────────────┘
 ```
 
 Supported diagram languages:
 
-| Language | Tag | Renderer | CLI Tool | Pure Python |
-|----------|-----|----------|----------|-------------|
+| Language | Code Block Tag | Renderer | External Tool | Pure Python |
+|----------|---------------|----------|---------------|-------------|
 | Mermaid | ```` ```mermaid ```` | MermaidRenderer | `mmdc` | ❌ |
 | PlantUML | ```` ```plantuml ```` | PlantUMLRenderer | `plantuml` | ❌ |
-| Graphviz | ```` ```dot ```` | GraphvizRenderer | `dot` | ❌ |
+| Graphviz / DOT | ```` ```dot ```` | GraphvizRenderer | `dot` | ❌ |
 | D2 | ```` ```d2 ```` | D2Renderer | `d2` | ❌ |
 | ASCII art | ```` ```ascii ```` | AsciiRenderer | None | ✅ (Pillow) |
-| SVG | ```` ```svg ```` | SvgRenderer | None | ✅ |
+| SVG | ```` ```svg ```` | SvgRenderer | cairosvg / rsvg-convert / inkscape | ✅ (partial) |
+| BlockDiag | ```` ```blockdiag ```` | BlockDiagRenderer | `blockdiag` | ❌ |
+| SeqDiag | ```` ```seqdiag ```` | SeqDiagRenderer | `seqdiag` | ❌ |
+| ActDiag | ```` ```actdiag ```` | ActDiagRenderer | `actdiag` | ❌ |
+| NwDiag | ```` ```nwdiag ```` | NwDiagRenderer | `nwdiag` | ❌ |
+| PacketDiag | ```` ```packetdiag ```` | PacketDiagRenderer | `packetdiag` | ❌ |
+| BPMN | ```` ```bpmn ```` | BPMNRenderer | `bpmn-to-svg` (Node.js) | ❌ |
+| Vega | ```` ```vega ```` | VegaRenderer | `vg2svg` (Node.js) | ❌ |
+| Vega-Lite | ```` ```vega-lite ```` | VegaLiteRenderer | `vl2svg` (Node.js) | ❌ |
 
-**Auto-detection**: Untagged code blocks containing box-drawing characters (`┌─┐│└┘`) or classic ASCII art patterns (`+--+`, `|  |`) are automatically rendered as ASCII diagrams.
+**Auto-detection**: Diagram language is detected automatically from content. No language tag required for supported formats:
+
+```
+graph TD                    → automatically detected as Mermaid
+A --> B
+
+@startuml                   → automatically detected as PlantUML
+Alice -> Bob: Hello
+@enduml
+
+digraph G {                 → automatically detected as Graphviz
+  A -> B
+}
+
+a -> b                      → automatically detected as D2
+
++-------+                   → automatically detected as ASCII
+| Hello |
++-------+
+```
+
+**Rendering is automatic** during `pimd md input.md output.docx` — no separate command needed.
+
+**DOCX output features per diagram**:
+- Center-aligned embedding
+- Auto-incrementing figure numbering (Figure 1, Figure 2, ...)
+- Caption support
+- Proper scaling with DPI awareness
+- SVG preferred, PNG fallback for Word compatibility
+- Error placeholder on render failure
 
 ### Equations
 Write LaTeX math — it becomes **native Word equations** (editable OMML, not images):
 
-```ascii
+```
   $$E = mc^2$$  ──►  Native Word equation (editable!)
   $H_2O$        ──►  Chemical formula detection
   \begin{align} ──►  Multi-line aligned equations with numbering
@@ -79,7 +121,7 @@ Write LaTeX math — it becomes **native Word equations** (editable OMML, not im
 - **Caching** — in-memory and Redis-backed
 
 ### Themes
-```ascii
+```
   ┌──────────────┐
   │  Theme (ABC) │  ◄── Extend this for custom themes
   ├──────────────┤
@@ -122,7 +164,7 @@ Load brand identity from JSON/TOML and apply across all documents:
 - Metadata (author, company, subject, version)
 
 ### Caching
-```ascii
+```
   ┌──────────────┐    ┌──────────────────┐
   │ CacheBackend │◄───│   MemoryCache    │
   │   (ABC)      │    │  (dict + TTL)   │
@@ -137,6 +179,14 @@ Load brand identity from JSON/TOML and apply across all documents:
   │   health)    │  │ equations        │
   └──────────────┘  └──────────────────┘
 ```
+
+Diagram caching uses SHA256 content hashing:
+
+```
+cache_key = SHA256(language + source)
+```
+
+If the diagram source has not changed, the cached SVG/PNG is reused and re-rendering is skipped entirely.
 
 ### Safety & Enterprise
 - Configurable limits: file size, text size, nesting depth, block count, image dimensions
@@ -183,11 +233,17 @@ pip install -e ".[all]"
 | `dev` | pytest, ruff, typer-cli | Development tools |
 | `all` | Everything above | Full install |
 
-External CLI tools for diagram rendering (install separately):
-- **Mermaid**: `npm install -g @mermaid-js/mermaid-cli`
-- **PlantUML**: `java -jar plantuml.jar` or `apt install plantuml`
-- **Graphviz**: `apt install graphviz` or `choco install graphviz`
-- **D2**: `curl -fsSL https://d2lang.com/install.sh | sh -s --`
+External CLI tools for diagram rendering (install separately when needed):
+
+| Diagram Tool | Installation |
+|-------------|-------------|
+| Mermaid | `npm install -g @mermaid-js/mermaid-cli` |
+| PlantUML | `java -jar plantuml.jar` or `apt install plantuml` |
+| Graphviz | `apt install graphviz` or `choco install graphviz` |
+| D2 | `curl -fsSL https://d2lang.com/install.sh \| sh -s --` |
+| BlockDiag family | `pip install blockdiag seqdiag actdiag nwdiag packetdiag` (provides CLI) |
+| BPMN | `npm install -g bpmn-to-svg` |
+| Vega / Vega-Lite | `npm install -g vega-cli` (provides vg2svg, vl2svg) |
 
 ---
 
@@ -196,7 +252,7 @@ External CLI tools for diagram rendering (install separately):
 ### CLI
 
 ```bash
-# Basic conversion
+# Basic conversion — diagrams are automatically detected and rendered
 pimd md input.md output.docx
 
 # With table of contents, cover page, and page numbers
@@ -259,7 +315,7 @@ from pimd import PiMD
 
 engine = PiMD()
 
-# File to file
+# File to file — diagrams are automatically detected and rendered
 engine.md_to_docx("report.md", "report.docx",
                   title="Annual Report",
                   author="Jane Doe",
@@ -305,31 +361,63 @@ async def convert(file: UploadFile = File(...)) -> Response:
 
 ### Conversion Pipeline
 
-```ascii
+```
   ┌──────────┐    ┌──────────┐    ┌───────────┐    ┌──────────┐    ┌──────────┐
   │  Source  │    │  Parser  │    │ Transform │    │ Renderer │    │ Output   │
   │  Text    │───►│          │───►│           │───►│          │───►│ .docx    │
   │ (MD/HTML)│    │ md-it / │    │ Diagrams │    │ python-  │    │ (file or │
   │          │    │ BS4     │    │ Equations │    │ docx     │    │ bytes)   │
   └──────────┘    └──────────┘    └───────────┘    └──────────┘    └──────────┘
-                                               
-                      Plugin Hooks ▲            ▲  Safety Check
-                                   │            │
-                  before_parse ────┤            │
-                  after_parse  ────┼────────────┘
-                  before_render ───┘
-                  after_render
+                                                
+                       Plugin Hooks ▲            ▲  Safety Check
+                                    │            │
+                   before_parse ────┤            │
+                   after_parse  ────┼────────────┘
+                   before_render ───┘
+                   after_render
+```
+
+### Diagram Pipeline
+
+```
+  Markdown
+     │
+     ▼
+  Parse (markdown-it-py)
+     │
+     ▼
+  Detect diagram blocks
+     ├── Known language tag? → use tagged renderer
+     ├── No tag → auto-detect from content (patterns + heuristics)
+     └── Not a diagram → pass through
+     │
+     ▼
+  DiagramRegistry.lookup(language)
+     │
+     ▼
+  Cache check (SHA256(language + source))
+     ├── Hit → return cached result
+     └── Miss → render via external tool
+     │
+     ▼
+  Render → SVG (preferred) + PNG (fallback)
+     │
+     ▼
+  Cache result
+     │
+     ▼
+  Insert into DOCX (center-aligned, with caption + figure number)
 ```
 
 ### Document Model
 
-```ascii
+```
   Document
   ├── Heading (level 1-6)
   ├── Paragraph
   │   └── Span (bold, italic, code, link, math, underline)
   ├── CodeBlock (language-tagged)
-  ├── Diagram (PNG bytes, source, language, caption)
+  ├── Diagram (PNG bytes, SVG bytes, source, language, caption, error)
   ├── EquationBlock (LaTeX, OMML XML, SVG, number)
   ├── Blockquote (nested)
   ├── BulletList / OrderedList
@@ -341,7 +429,7 @@ async def convert(file: UploadFile = File(...)) -> Response:
 
 ### Service Architecture
 
-```ascii
+```
   ┌─────────────────────────────────────────────────────────┐
   │                     PiMD (API)                          │
   │  md_to_docx()  md_text_to_docx_bytes()  async_*()      │
@@ -372,7 +460,7 @@ async def convert(file: UploadFile = File(...)) -> Response:
 ### Conversion
 | Command | Description |
 |---------|-------------|
-| `pimd md <INPUT> <OUTPUT>` | Convert Markdown file to DOCX |
+| `pimd md <INPUT> <OUTPUT>` | Convert Markdown file to DOCX (auto-renders diagrams) |
 | `pimd html <INPUT> <OUTPUT>` | Convert HTML file to DOCX |
 | `pimd merge <FILES>... <OUTPUT>` | Merge multiple documents |
 | `pimd batch <DIR> <DIR>` | Batch convert directory |
@@ -463,6 +551,15 @@ company = "ACME Corp"
 generate_toc = true
 page_numbers = true
 
+[diagram]
+cache = true
+svg_preferred = true
+max_width = 6.5
+figure_captions = true
+auto_number = true
+detect_diagrams = true
+default_dpi = 150
+
 [layout]
 page_size = "A4"
 orientation = "portrait"
@@ -487,6 +584,8 @@ default_ttl = 300
 
 ## Plugin System
 
+### Conversion Plugins
+
 ```python
 from pimd.plugins import Plugin, ConversionHook, PluginManager
 
@@ -509,6 +608,54 @@ class LoggingPlugin(Plugin):
 manager = PluginManager()
 LoggingPlugin().attach(manager)
 engine = PiMD(plugins=manager)
+```
+
+### Diagram Renderer Plugins
+
+Register third-party diagram renderers without modifying PiMD core:
+
+```python
+from pimd import register_diagram_renderer
+from pimd.diagrams.renderers import DiagramRenderer
+from pimd.diagrams.models import DiagramResult
+
+class CustomDSLRenderer(DiagramRenderer):
+    language = "customdsl"
+    name = "Custom DSL"
+    version = "1.0.0"
+    description = "My custom diagram language"
+
+    def is_available(self) -> bool:
+        return True  # or check for a CLI tool
+
+    def render(self, source: str, **options) -> DiagramResult:
+        # Convert source to SVG or PNG
+        svg = convert_custom_dsl_to_svg(source)
+        return DiagramResult(
+            source=source,
+            language=self.language,
+            svg=svg,
+        )
+
+# Register globally — works with pimd md input.md output.docx
+register_diagram_renderer("customdsl", CustomDSLRenderer())
+```
+
+### All Renderers Must Implement
+
+```python
+class DiagramRenderer:
+    language: str = ""
+    name: str = ""
+    version: str = "1.0.0"
+    description: str = ""
+
+    def render(self, source: str, **options) -> DiagramResult:
+        """Return DiagramResult with svg (preferred) and/or png."""
+
+    def is_available(self) -> bool:
+        """Check if external tools are installed."""
+        return True
 ```
 
 ---
@@ -642,6 +789,126 @@ print(f"Total time: {report.metrics.total_time:.2f}s")
 
 ---
 
+## Comparison
+
+Evidence-based comparison of PiMD against other document conversion tools. Each feature is verified against source code, tests, and documentation.
+
+### Feature Comparison
+
+| Feature | PiMD | Pandoc | Quarto | Sphinx | MkDocs | python-docx |
+|---------|------|--------|--------|--------|--------|-------------|
+| Markdown → DOCX | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| HTML → DOCX | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Python library API | ✅ | ⚠️ Limited | ⚠️ Limited | ✅ | ⚠️ Limited | ✅ |
+| CLI | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Automatic diagram rendering | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| Mermaid | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ |
+| PlantUML | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ |
+| Graphviz / DOT | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| D2 | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| BlockDiag family (5 formats) | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| BPMN | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Vega / Vega-Lite | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| ASCII art diagrams | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Auto diagram detection | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| SHA256 diagram caching | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Figure numbering | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| LaTeX → OMML (editable Word eq) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| LaTeX → SVG fallback | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Equation numbering | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Template system | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Brand identity | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Cover page | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Table of Contents | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Page numbers | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Header / Footer | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Multi-format export | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| PDF export | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Batch conversion | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
+| Book compilation | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Report generation | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Citation / BibTeX | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Document merging | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Plugin system | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ |
+| Plugin renderers | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Obsidian compatibility | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| MkDocs compatibility | ✅ | ❌ | ❌ | ❌ | N/A | ❌ |
+| Docusaurus compatibility | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Sphinx compatibility | ✅ | ❌ | ❌ | N/A | ❌ | ❌ |
+| Frontmatter | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Callouts / Admonitions | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ |
+| Footnotes | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Large file streaming | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Incremental builds | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ |
+| Parallel processing | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Memory caching | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Redis caching | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Safety limits | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Profiling | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Composable pipeline | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| In-memory (bytes) mode | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Async API | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Web framework examples | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
+
+Legend:
+- ✅ = Supported natively
+- ❌ = Not supported
+- ⚠️ = Limited / requires external tool or scripting
+- N/A = Not applicable
+
+### Evidence Sources
+
+- **PiMD features**: verified against source code at `src/pimd/`, tests at `tests/`, and CLI at `src/pimd/cli/app.py`
+- **Pandoc features**: based on Pandoc 3.x documentation at https://pandoc.org
+- **Quarto features**: based on Quarto 1.5 documentation at https://quarto.org
+- **Sphinx features**: based on Sphinx 8.x documentation at https://www.sphinx-doc.org
+- **MkDocs features**: based on MkDocs 1.6 documentation at https://www.mkdocs.org
+- **python-docx features**: based on python-docx 1.1 documentation at https://python-docx.readthedocs.io
+
+---
+
+## Why Choose PiMD
+
+Based on verified, implemented features:
+
+- **Python-native API** — PiMD is a Python library first, CLI second. Import `PiMD()` and convert in one line.
+- **Automatic diagram rendering** — diagrams in fenced code blocks are detected, rendered, and embedded during conversion. No separate render command needed.
+- **Editable Word equations** — LaTeX math is converted to native OMML (Office Math Markup Language), editable in Microsoft Word's equation editor. Not images.
+- **16 diagram renderers** — Mermaid, PlantUML, Graphviz, D2, BlockDiag family (5), ASCII, SVG, BPMN, Vega, Vega-Lite built in. Register more via plugin API.
+- **SHA256 content-hash caching** — rendered diagrams are cached by `SHA256(language + source)`. Unchanged diagrams skip re-rendering.
+- **Professional DOCX output** — center-aligned diagrams, auto-incrementing figure numbers, captions, proper scaling, error placeholders.
+- **Composable pipeline** — `Pipeline` class with `ParseStage`, `TransformStage`, `RenderStage` for custom conversion workflows.
+- **Plugin system** — lifecycle hooks (`before_parse`, `after_parse`, `before_render`, `after_render`) for custom processing.
+- **Ecosystem compatibility** — imports Markdown from Obsidian, MkDocs, Docusaurus, and Sphinx projects without pre-processing.
+- **In-memory conversion mode** — convert Markdown/HTML strings to DOCX `bytes` without writing to disk. Ideal for web frameworks.
+- **Enterprise safety** — configurable limits on file size, text length, block count, nesting depth. Path traversal protection.
+
+---
+
+## When To Use PiMD
+
+PiMD is a good choice for:
+
+- **Python applications** that need automated DOCX generation from Markdown or HTML
+- **Report generation** — structured reports (executive, technical, audit, project, research) with built-in templates
+- **Documentation pipelines** — CI/CD workflows that convert Markdown documentation to DOCX for distribution
+- **Web frameworks** (FastAPI, Flask, Django) — server-side document generation using the in-memory bytes API
+- **Diagram-rich documents** — technical papers, architecture docs, API specs that use Mermaid, PlantUML, Graphviz, or other diagram languages
+- **Scientific/technical writing** — documents with LaTeX equations that must be editable in Word
+- **Enterprise document workflows** — where safety limits, branding, caching, and plugin hooks are required
+- **Documentation site exports** — converting MkDocs, Docusaurus, Sphinx, or Obsidian projects to DOCX
+
+---
+
+## When Another Tool May Be Better
+
+- **Pandoc** — if you need maximum format compatibility (100+ input/output formats). Pandoc supports formats like EPUB, LaTeX, Man pages, etc. that PiMD does not.
+- **Quarto** — if you are doing scientific publishing with computational notebooks (Jupyter, R Markdown integration). Quarto's notebook execution and cross-format rendering is more mature.
+- **MkDocs / Sphinx** — if your primary output is a documentation website (HTML). These tools have richer web theming, search, and navigation features than PiMD.
+- **python-docx** — if you need fine-grained, imperative control over every XML element in a DOCX file. python-docx gives you direct access to the OOXML structure. PiMD works at a higher abstraction level.
+
+---
+
 ## Development
 
 ```bash
@@ -663,11 +930,11 @@ python -m build
 ### Test Suite
 ```
 17 test files covering:
-├── API              ├── Diagrams          ├── Equations
-├── Renderer         ├── Themes            ├── CLI
-├── Config           ├── Frontmatter       ├── GitHub Features
-├── Compatibility    ├── HTML              ├── Markdown
-├── Engine Features  ├── Project Level     ├── Publishing
+├── API              ├── Diagrams (105 tests)  ├── Equations
+├── Renderer         ├── Themes                ├── CLI
+├── Config           ├── Frontmatter           ├── GitHub Features
+├── Compatibility    ├── HTML                  ├── Markdown
+├── Engine Features  ├── Project Level         ├── Publishing
 └── Stress/Performance
 ```
 
@@ -676,31 +943,3 @@ python -m build
 ## License
 
 MIT License — see [LICENSE](LICENSE).
-
----
-
-## Why PiMD?
-
-```ascii
-  ┌────────────────────────────────────────────────────────────┐
-  │                    Why Not Just Pandoc?                     │
-  ├────────────────────────────────────────────────────────────┤
-  │                                                            │
-  │  Pandoc                          PiMD                     │
-  │  ──────                          ────                      │
-  │  • Diagrams as images            • Diagrams rendered from  │
-  │  • Equations as images             code blocks             │
-  │  • Basic templates               • Equations as editable   │
-  │  • No plugin system                OMML                    │
-  │  • No caching                    • Themes + templates      │
-  │  • No safety layer               • Branding system         │
-  │  • No project-level tools        • Plugin hooks            │
-  │  • No book compilation           • Redis + memory caching  │
-  │  • Single-format output          • SafetyGuard security    │
-  │                                  • Book compiler           │
-  │                                  • Batch/project converter │
-  │                                  • Pipeline framework      │
-  │                                  • Async + in-memory API   │
-  │                                  • Web framework examples  │
-  └────────────────────────────────────────────────────────────┘
-```

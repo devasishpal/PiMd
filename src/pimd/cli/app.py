@@ -460,7 +460,7 @@ def version_cmd() -> None:
 
 diagrams_app = typer.Typer(
     name="diagrams",
-    help="Diagram rendering tools (Mermaid, PlantUML, Graphviz, D2, ASCII)",
+    help="Diagram rendering tools (Mermaid, PlantUML, Graphviz, D2, BlockDiag, Vega, BPMN, ASCII)",
     no_args_is_help=True,
 )
 app.add_typer(diagrams_app, name="diagrams")
@@ -470,11 +470,16 @@ app.add_typer(diagrams_app, name="diagrams")
 def diagrams_list() -> None:
     """List available diagram renderers and their status."""
     from pimd.diagrams.renderers import (
+        ActDiagRenderer,
         AsciiRenderer,
+        BlockDiagRenderer,
         D2Renderer,
         GraphvizRenderer,
         MermaidRenderer,
+        NwDiagRenderer,
+        PacketDiagRenderer,
         PlantUMLRenderer,
+        SeqDiagRenderer,
         SvgRenderer,
     )
 
@@ -487,6 +492,11 @@ def diagrams_list() -> None:
         D2Renderer(),
         AsciiRenderer(),
         SvgRenderer(),
+        BlockDiagRenderer(),
+        SeqDiagRenderer(),
+        ActDiagRenderer(),
+        NwDiagRenderer(),
+        PacketDiagRenderer(),
     ]
 
     rows: list[dict[str, str]] = []
@@ -570,11 +580,16 @@ def diagrams_doctor() -> None:
     """Diagnose diagram rendering tools on the system."""
     from pimd.cli.display import doctor_table
     from pimd.diagrams.renderers import (
+        ActDiagRenderer,
         AsciiRenderer,
+        BlockDiagRenderer,
         D2Renderer,
         GraphvizRenderer,
         MermaidRenderer,
+        NwDiagRenderer,
+        PacketDiagRenderer,
         PlantUMLRenderer,
+        SeqDiagRenderer,
         SvgRenderer,
     )
 
@@ -588,6 +603,11 @@ def diagrams_doctor() -> None:
         D2Renderer(),
         AsciiRenderer(),
         SvgRenderer(),
+        BlockDiagRenderer(),
+        SeqDiagRenderer(),
+        ActDiagRenderer(),
+        NwDiagRenderer(),
+        PacketDiagRenderer(),
     ]
 
     for r in renderers:
@@ -624,11 +644,16 @@ def diagrams_doctor() -> None:
 
 def _load_renderer(language: str):  # noqa: ANN202
     from pimd.diagrams.renderers import (
+        ActDiagRenderer,
         AsciiRenderer,
+        BlockDiagRenderer,
         D2Renderer,
         GraphvizRenderer,
         MermaidRenderer,
+        NwDiagRenderer,
+        PacketDiagRenderer,
         PlantUMLRenderer,
+        SeqDiagRenderer,
         SvgRenderer,
     )
 
@@ -639,6 +664,11 @@ def _load_renderer(language: str):  # noqa: ANN202
         "d2": D2Renderer,
         "ascii": AsciiRenderer,
         "svg": SvgRenderer,
+        "blockdiag": BlockDiagRenderer,
+        "seqdiag": SeqDiagRenderer,
+        "actdiag": ActDiagRenderer,
+        "nwdiag": NwDiagRenderer,
+        "packetdiag": PacketDiagRenderer,
     }
     cls = mapping.get(language.lower())
     if not cls:
@@ -655,6 +685,11 @@ def _test_source_for(language: str) -> str:
         "ascii": "+-------+     +-------+\n| Hello | --> | World |\n+-------+     +-------+",
         "svg": '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50">'
         '<rect width="100" height="50" fill="blue"/></svg>',
+        "blockdiag": 'blockdiag {\n  A -> B;\n}',
+        "seqdiag": 'seqdiag {\n  A -> B;\n}',
+        "actdiag": 'actdiag {\n  A -> B;\n}',
+        "nwdiag": 'nwdiag {\n  A -> B;\n}',
+        "packetdiag": 'packetdiag {\n  A -> B;\n}',
     }
     return sources.get(language.lower(), "")
 

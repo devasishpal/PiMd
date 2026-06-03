@@ -119,10 +119,12 @@ class Diagram:
     """A rendered diagram block embedded in the document."""
 
     alt: str
-    png_bytes: bytes
-    source: str
-    language: str
+    png_bytes: bytes = b""
+    source: str = ""
+    language: str = ""
     caption: str | None = None
+    svg_bytes: bytes | None = None
+    error: str | None = None
 
 
 @dataclass

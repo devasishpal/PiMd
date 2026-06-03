@@ -49,8 +49,16 @@ from pimd.config import Config
 from pimd.converters.html import HTMLConverter, html_to_docx
 from pimd.converters.markdown import MarkdownConverter
 from pimd.deprecation import deprecate_parameter, deprecated
-from pimd.diagrams import DiagramEngine, DiagramRegistry
-from pimd.diagrams.models import DIAGRAM_LANGUAGES, DiagramConfig
+from pimd.diagrams import (
+    DIAGRAM_LANGUAGES,
+    DiagramEngine,
+    DiagramRegistry,
+    RenderResult,
+    get_diagram_renderer,
+    list_diagram_renderers,
+    register_diagram_renderer,
+)
+from pimd.diagrams.models import DiagramConfig
 from pimd.docusaurus import DocusaurusConfig, DocusaurusProject, DocusaurusProjectConverter
 from pimd.equations import EquationConfig, EquationEngine, EquationResult
 from pimd.exceptions import ConversionError, ParserError, PiMDError, RendererError
@@ -122,6 +130,10 @@ __all__ = [
     "DiagramRegistry",
     "DiagramConfig",
     "DIAGRAM_LANGUAGES",
+    "RenderResult",
+    "register_diagram_renderer",
+    "get_diagram_renderer",
+    "list_diagram_renderers",
     # Equations
     "EquationEngine",
     "EquationConfig",
@@ -267,7 +279,7 @@ __all__ = [
     "ProfileType",
 ]
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __author__ = "PiMD Contributors"
 __description__ = "Professional document publishing platform"
 
