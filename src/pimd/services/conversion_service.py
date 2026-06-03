@@ -8,7 +8,7 @@ from typing import Any
 
 from pimd.caching import CacheBackend
 from pimd.exceptions import ConversionError
-from pimd.models import Document, DocumentStatistics
+from pimd.models import Block, CodeBlock, Diagram, Document, DocumentStatistics, Paragraph
 from pimd.observability import ConversionMetrics, ConversionReport, Timer
 from pimd.plugins import ConversionHook, PluginManager
 from pimd.renderers.docx_renderer import DocxRenderer
@@ -18,6 +18,32 @@ from pimd.themes.base import Theme
 from pimd.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+_BOX_CHARS = frozenset(
+    "\u2500\u2502\u250c\u2510\u2514\u2518\u251c\u2524\u252c\u2534\u253c"
+    "\u2550\u2551\u2554\u2557\u255a\u255d\u2560\u2563\u2566\u2569\u256c"
+    "\u2501\u2503\u250f\u2513\u2517\u251b\u2523\u252b\u2533\u253b\u254b"
+)
+
+
+def _looks_like_ascii_diagram(code: str) -> bool:
+    lines = code.strip().splitlines()
+    if len(lines) < 3:
+        return False
+    for ch in _BOX_CHARS:
+        if ch in code:
+            return True
+    has_plus_minus = False
+    has_pipe = False
+    for line in lines:
+        stripped = line.strip()
+        if "+" in stripped and "-" in stripped:
+            has_plus_minus = True
+        if "|" in stripped:
+            has_pipe = True
+        if has_plus_minus and has_pipe:
+            return True
+    return False
 
 
 @dataclass
@@ -44,12 +70,16 @@ class ConversionService:
         cache: CacheBackend | None = None,
         limits: SafetyLimits | None = None,
         plugins: PluginManager | None = None,
+        diagram_engine: Any = None,
+        equation_engine: Any = None,
     ) -> None:
         self._theme = theme or ProfessionalTheme()
         self._renderer = DocxRenderer(self._theme)
         self._cache = cache
         self._guard = SafetyGuard(limits)
         self._plugins = plugins or PluginManager()
+        self._diagram_engine = diagram_engine or _default_diagram_engine()
+        self._equation_engine = equation_engine or _default_equation_engine()
         self._last_report: ConversionReport | None = None
 
     # ------------------------------------------------------------------
@@ -190,6 +220,71 @@ class ConversionService:
         renderer = _DocxRenderer(self._theme)
         return renderer.render_to_bytes(document, **options)
 
+    def _process_diagrams(self, document: Document) -> None:
+        if not self._diagram_engine:
+            return
+        registry = self._diagram_engine.registry
+        new_blocks: list[Block] = []
+        for block in document.blocks:
+            if isinstance(block, CodeBlock):
+                lang = block.language
+                if lang and lang in registry:
+                    result = self._diagram_engine.render(block.code, lang)
+                    if result.png:
+                        new_blocks.append(
+                            Diagram(
+                                alt=f"{lang} diagram",
+                                png_bytes=result.png,
+                                source=block.code,
+                                language=lang,
+                                caption=lang,
+                            )
+                        )
+                    else:
+                        logger.warning(
+                            "Diagram rendering failed for %s: %s", lang, result.error
+                        )
+                        new_blocks.append(block)
+                elif lang is None and _looks_like_ascii_diagram(block.code):
+                    result = self._diagram_engine.render(block.code, "ascii")
+                    if result.png:
+                        new_blocks.append(
+                            Diagram(
+                                alt="ASCII diagram",
+                                png_bytes=result.png,
+                                source=block.code,
+                                language="ascii",
+                            )
+                        )
+                    else:
+                        new_blocks.append(block)
+                else:
+                    new_blocks.append(block)
+            else:
+                new_blocks.append(block)
+        document.blocks = new_blocks
+
+    def _process_equations(self, document: Document) -> None:
+        if not self._equation_engine:
+            return
+        engine = self._equation_engine
+        new_blocks: list[Block] = []
+        for block in document.blocks:
+            if isinstance(block, CodeBlock):
+                new_blocks.append(block)
+            elif isinstance(block, Paragraph):
+                eq_text, is_eq = engine._process_paragraph(block)
+                if is_eq:
+                    if eq_text.omml is not None or eq_text.svg is not None:
+                        new_blocks.append(eq_text)
+                    else:
+                        new_blocks.append(block)
+                else:
+                    new_blocks.append(block)
+            else:
+                new_blocks.append(block)
+        document.blocks = new_blocks
+
     def _convert(
         self,
         fmt: str,
@@ -260,6 +355,8 @@ class ConversionService:
 
             # ---- Plugin: after_parse / before_render ----
             document = self._plugins.dispatch(ConversionHook.AFTER_PARSE, document, context=ctx)
+            self._process_diagrams(document)
+            self._process_equations(document)
             document = self._plugins.dispatch(ConversionHook.BEFORE_RENDER, document, context=ctx)
 
             # ---- Render ----
@@ -360,3 +457,46 @@ def _collect_statistics(document: Document) -> DocumentStatistics:
 
     walk(document.blocks)
     return stats
+
+
+def _default_diagram_engine() -> Any:
+    from pimd.diagrams import DiagramEngine, DiagramRegistry
+    from pimd.diagrams.renderers import (
+        AsciiRenderer,
+        D2Renderer,
+        GraphvizRenderer,
+        MermaidRenderer,
+        PlantUMLRenderer,
+        SvgRenderer,
+    )
+
+    registry = DiagramRegistry()
+    for renderer_cls in (
+        MermaidRenderer,
+        PlantUMLRenderer,
+        GraphvizRenderer,
+        D2Renderer,
+        AsciiRenderer,
+        SvgRenderer,
+    ):
+        renderer = renderer_cls()
+        if renderer.is_available():
+            registry.register(renderer)
+
+    if len(registry) == 0:
+        return None
+    return DiagramEngine(registry=registry)
+
+
+def _default_equation_engine() -> Any:
+    from pimd.equations import EquationEngine
+    from pimd.equations.cache import MemoryEquationCache
+    from pimd.equations.models import EquationConfig
+
+    try:
+        return EquationEngine(
+            config=EquationConfig(),
+            cache=MemoryEquationCache(default_ttl=7200),
+        )
+    except Exception:
+        return None
