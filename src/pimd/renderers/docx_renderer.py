@@ -135,6 +135,10 @@ class DocxRenderer:
             elif footer_text:
                 self._set_footer(content_section, footer_text)
 
+            # Re-apply layout so that any sections added after the initial
+            # call (cover, TOC, etc.) inherit the correct orientation & margins
+            apply_layout_to_doc(self._doc)
+
             self._doc.save(str(output_path))
             logger.info("Rendered %s", output_path)
         except RendererError:
@@ -195,6 +199,8 @@ class DocxRenderer:
                 self._add_page_numbers(content_section)
             elif footer_text:
                 self._set_footer(content_section, footer_text)
+
+            apply_layout_to_doc(self._doc)
 
             buf = io.BytesIO()
             self._doc.save(buf)

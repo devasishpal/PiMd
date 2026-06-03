@@ -122,6 +122,7 @@ def apply_layout_to_doc(doc: Any, layout: DocumentLayoutConfig | None = None) ->
     w, h = cfg.page_size_mm()
     width_emu = int(w / 25.4 * 914400)
     height_emu = int(h / 25.4 * 914400)
+    orient = "landscape" if cfg.orientation == PageOrientation.LANDSCAPE else "portrait"
 
     for section in doc.sections:
         sect_pr = section._sectPr
@@ -131,6 +132,7 @@ def apply_layout_to_doc(doc: Any, layout: DocumentLayoutConfig | None = None) ->
             sect_pr.append(pg_sz)
         pg_sz.set(qn("w:w"), str(width_emu))
         pg_sz.set(qn("w:h"), str(height_emu))
+        pg_sz.set(qn("w:orient"), orient)
 
         section.top_margin = Inches(cfg.margins.top)
         section.bottom_margin = Inches(cfg.margins.bottom)
