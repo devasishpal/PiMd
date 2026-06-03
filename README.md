@@ -287,7 +287,7 @@ PiMD follows a layered architecture with clear separation of concerns:
 │              PiMD class, convert()                  │
 ├─────────────────────────────────────────────────────┤
 │                Service Layer                        │
-│    ConversionService, DocumentService, TemplateService│
+│  ConversionService, DocumentService, TemplateService│
 ├─────────────────────────────────────────────────────┤
 │               Pipeline Layer                        │
 │     Parse → Transform → Render → Export + Hooks     │
