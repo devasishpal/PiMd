@@ -43,8 +43,9 @@ class MarkdownParser:
         self._md: MarkdownIt = MarkdownIt("commonmark", {"maxNesting": 100})
         self._md.enable(["table", "linkify"])
         try:
-            from mdit_py_plugins.superscript import superscript_plugin
             from mdit_py_plugins.subscript import sub_plugin
+            from mdit_py_plugins.superscript import superscript_plugin
+
             self._md.use(superscript_plugin).use(sub_plugin)
         except ImportError:
             pass

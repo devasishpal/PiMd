@@ -435,7 +435,6 @@ class DocxRenderer:
         text = sanitize_text(block.plain_text())
         p = self._doc.add_heading(text, level=level)
         if block.alignment:
-            align_map = {"left": 0, "center": 1, "right": 2, "justify": 3}
             from docx.enum.text import WD_ALIGN_PARAGRAPH
             p.alignment = getattr(WD_ALIGN_PARAGRAPH, block.alignment.upper(), None)
 
@@ -448,7 +447,6 @@ class DocxRenderer:
         p = doc.add_paragraph(style="Normal")
         p.paragraph_format.space_after = Pt(6)
         if block.alignment:
-            align_map = {"left": 0, "center": 1, "right": 2, "justify": 3}
             from docx.enum.text import WD_ALIGN_PARAGRAPH
             p.alignment = getattr(WD_ALIGN_PARAGRAPH, block.alignment.upper(), None)
         DocxRenderer._add_spans_to_paragraph(p, block.spans)
@@ -481,14 +479,14 @@ class DocxRenderer:
                     DocxRenderer._apply_vert_align(run, "subscript")
 
     @staticmethod
-    def _apply_vert_align(run: DocxRun, kind: str) -> None:
+    def _apply_vert_align(run, kind: str) -> None:
         """Set superscript or subscript on a run via w:vertAlign."""
         from docx.oxml import OxmlElement
         from docx.oxml.ns import qn
-        rPr = run._r.get_or_add_rPr()
+        rpr = run._r.get_or_add_rPr()
         vert = OxmlElement("w:vertAlign")
         vert.set(qn("w:val"), kind)
-        rPr.append(vert)
+        rpr.append(vert)
 
     @staticmethod
     def _add_hyperlink(paragraph: DocxParagraph, text: str, url: str) -> None:
