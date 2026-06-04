@@ -167,6 +167,10 @@ def _set_section_properties(section: Any, config: CoverConfig) -> None:
             props = sect_pr.find(qn("w:pgMar"))
             if props is None:
                 props = sect_pr.makeelement(qn("w:pgMar"), {})
+                props.set(qn("w:top"), "1440")
+                props.set(qn("w:bottom"), "1440")
+                props.set(qn("w:left"), "1800")
+                props.set(qn("w:right"), "1800")
                 sect_pr.append(props)
     except Exception:
         pass

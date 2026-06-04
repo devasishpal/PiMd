@@ -292,11 +292,15 @@ def doctor_table(items: list[dict[str, str]]) -> None:
 # ======================================================================
 
 
-def info_table(data: dict[str, str]) -> None:
+def info_table(data: dict[str, object]) -> None:
     """Render key-value info table."""
     table = Table(show_header=False, box=None, padding=(0, 2))
     table.add_column("Key", style="bold cyan", width=30)
     table.add_column("Value")
     for key, value in data.items():
+        if isinstance(value, list):
+            value = ", ".join(str(v) for v in value)
+        elif not isinstance(value, str):
+            value = str(value)
         table.add_row(key, value)
     console.print(table)

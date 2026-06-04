@@ -529,7 +529,7 @@ def diagrams_list() -> None:
         table.add_row(
             row["language"],
             row["renderer"],
-            "[green]\u2713[/]" if row["available"] == "yes" else "[red]\u2717[/]",
+            "[green]Y[/]" if row["available"] == "yes" else "[red]X[/]",
             row["description"],
         )
     csl.print(table)
@@ -564,7 +564,7 @@ def diagrams_test(
         display_error("Render failed", result.error)
         raise typer.Exit(code=1)
 
-    console.print(f"[green]\u2713[/] {language} diagram rendered successfully")
+    console.print(f"[green]Y[/] {language} diagram rendered successfully")
     if result.png:
         console.print(f"  PNG: {len(result.png)} bytes")
     if result.svg:
@@ -758,7 +758,7 @@ def equations_test(
         display_error("Render failed", result.error)
         raise typer.Exit(code=1)
 
-    console.print("[green]\u2713[/] Equation rendered successfully")
+    console.print("[green]Y[/] Equation rendered successfully")
     console.print(f"  OMML: {'yes' if result.has_omml else 'no'}")
     console.print(f"  SVG:  {'yes (' + str(len(result.svg)) + ' bytes)' if result.svg else 'no'}")
     console.print(f"  Time: {result.render_time:.4f}s")
@@ -873,11 +873,11 @@ def template_validate(
     mgr = TemplateManager()
     result = mgr.validate(name)
     if result.valid:
-        console.print(f"[green]\u2713[/] Template '{name}' is valid")
+        console.print(f"[green]Y[/] Template '{name}' is valid")
     for w in result.warnings:
         console.print(f"[yellow]![/] {w}")
     for e in result.errors:
-        console.print(f"[red]\u2717[/] {e}")
+        console.print(f"[red]X[/] {e}")
 
 
 # ======================================================================
@@ -906,7 +906,7 @@ def brand_set(
 
         mgr = BrandingManager()
         mgr.load(source)
-        console.print(f"[green]\u2713[/] Brand loaded: {mgr.brand.name if mgr.brand else '?'}")
+        console.print(f"[green]Y[/] Brand loaded: {mgr.brand.name if mgr.brand else '?'}")
     except Exception as exc:
         display_error("Brand load failed", str(exc))
         raise typer.Exit(code=1) from exc
@@ -963,7 +963,7 @@ def export_docx(
         input, "docx", output, template=template, cover_page=cover, generate_toc=toc
     )
     if result.success:
-        console.print(f"[green]\u2713[/] Exported to {result.output_path}")
+        console.print(f"[green]Y[/] Exported to {result.output_path}")
     else:
         display_error("Export failed", result.error or "")
         raise typer.Exit(code=1)
@@ -982,7 +982,7 @@ def export_pdf(
 
     result = ExportConverter().convert(input, "pdf", output, pdf_engine=engine)
     if result.success:
-        console.print(f"[green]\u2713[/] Exported to {result.output_path}")
+        console.print(f"[green]Y[/] Exported to {result.output_path}")
     else:
         display_error("PDF export failed", result.error or "")
         raise typer.Exit(code=1)
@@ -998,7 +998,7 @@ def export_html(
 
     result = ExportConverter().convert(input, "html", output)
     if result.success:
-        console.print(f"[green]\u2713[/] Exported to {result.output_path}")
+        console.print(f"[green]Y[/] Exported to {result.output_path}")
     else:
         display_error("Export failed", result.error or "")
         raise typer.Exit(code=1)
@@ -1014,7 +1014,7 @@ def export_txt(
 
     result = ExportConverter().convert(input, "txt", output)
     if result.success:
-        console.print(f"[green]\u2713[/] Exported to {result.output_path}")
+        console.print(f"[green]Y[/] Exported to {result.output_path}")
     else:
         display_error("Export failed", result.error or "")
         raise typer.Exit(code=1)
@@ -1078,7 +1078,7 @@ def report_generate(
     engine = ReportEngine(config=config)
     try:
         out = engine.generate(output)
-        console.print(f"[green]\u2713[/] Report generated: {out}")
+        console.print(f"[green]Y[/] Report generated: {out}")
     except Exception as exc:
         display_error("Report generation failed", str(exc))
         raise typer.Exit(code=1) from exc
@@ -1133,7 +1133,7 @@ def book_compile(
     compiler = BookCompiler(config=bk_cfg)
     try:
         out = compiler.compile(output)
-        console.print(f"[green]\u2713[/] Book compiled: {out}")
+        console.print(f"[green]Y[/] Book compiled: {out}")
     except Exception as exc:
         display_error("Book compilation failed", str(exc))
         raise typer.Exit(code=1) from exc
@@ -1162,7 +1162,7 @@ def citations_load(
     engine = CitationEngine()
     engine.load_bibtex(bibtex)
     entries = engine.all_entries()
-    console.print(f"[green]\u2713[/] Loaded {len(entries)} entries")
+    console.print(f"[green]Y[/] Loaded {len(entries)} entries")
     for entry in entries[:5]:
         console.print(f"  [{entry.key}] {entry.format(CitationStyle(style))[:100]}")
     if len(entries) > 5:
@@ -1183,7 +1183,7 @@ def citations_bibliography(
     bibliography = engine.bibliography(CitationStyle(style))
     if output:
         Path(output).write_text(bibliography, encoding="utf-8")
-        console.print(f"[green]\u2713[/] Bibliography written to {output}")
+        console.print(f"[green]Y[/] Bibliography written to {output}")
     else:
         console.print(bibliography)
 
@@ -1210,7 +1210,7 @@ def merge(
     merger = DocumentMerger()
     try:
         out = merger.merge(input_files, output, generate_toc=toc, cover_page=cover)
-        console.print(f"[green]\u2713[/] Merged {len(input_files)} files into {out}")
+        console.print(f"[green]Y[/] Merged {len(input_files)} files into {out}")
     except Exception as exc:
         display_error("Merge failed", str(exc))
         raise typer.Exit(code=1) from exc
@@ -1273,7 +1273,7 @@ def validate(
         severity_str = "[red]ERROR[/]" if issue.severity == "error" else "[yellow]WARN[/]"
         table.add_row(severity_str, issue.type, issue.message)
     if not report.issues:
-        console.print(f"[green]\u2713[/] No issues found in {input}")
+        console.print(f"[green]Y[/] No issues found in {input}")
     else:
         console.print(table)
         console.print(report.summary())
@@ -1310,14 +1310,14 @@ def project_convert(
         output_format=format,
         pattern=pattern,
     )
-    console.print("[green]\u2713[/] Project converted")
+    console.print("[green]Y[/] Project converted")
     console.print(
         f"  Total: {result.total_files}, Converted: {result.converted}, "
         f"Skipped: {result.skipped}, Failed: {result.failed}"
     )
     if result.errors:
         for path, err in result.errors[:10]:
-            console.print(f"  [red]\u2717[/] {path}: {err}")
+            console.print(f"  [red]X[/] {path}: {err}")
 
 
 # ======================================================================
@@ -1376,7 +1376,7 @@ def config_init(
     if path is None:
         path = Path.cwd() / ".pimdconfig"
     Config.write_default(path)
-    console.print(f"[green]\u2713[/] Default config written to {path}")
+    console.print(f"[green]Y[/] Default config written to {path}")
 
 
 @config_app.command(name="validate")
@@ -1390,9 +1390,9 @@ def config_validate() -> None:
     cfg.load_project()
     errors = cfg.validate()
     if not errors:
-        console.print("[green]\u2713[/] Configuration is valid")
+        console.print("[green]Y[/] Configuration is valid")
     else:
-        console.print(f"[red]\u2717[/] Found {len(errors)} configuration error(s):")
+        console.print(f"[red]X[/] Found {len(errors)} configuration error(s):")
         for err in errors:
             console.print(f"  [red]-[/] {err}")
 
@@ -1440,10 +1440,10 @@ def cache_clear() -> None:
         redis_cache = RedisCacheBackend()
         if redis_cache.is_available():
             redis_cache.clear()
-            console.print("[green]\u2713[/] Redis cache cleared")
+            console.print("[green]Y[/] Redis cache cleared")
     except Exception:
         pass
-    console.print("[green]\u2713[/] Memory cache cleared")
+    console.print("[green]Y[/] Memory cache cleared")
 
 
 @cache_app.command(name="status")
@@ -1455,9 +1455,9 @@ def cache_status() -> None:
     cache = RedisCacheBackend()
     status = cache.health_check()
     if status.get("available"):
-        console.print("[green]\u2713[/] Redis: Connected")
+        console.print("[green]Y[/] Redis: Connected")
     else:
-        console.print("[yellow]\u2717[/] Redis: Not available (using memory)")
+        console.print("[yellow]X[/] Redis: Not available (using memory)")
 
 
 @cache_app.command(name="info")
@@ -1626,7 +1626,7 @@ def frontmatter_strip(
     text = input.read_text(encoding="utf-8")
     body = strip_frontmatter(text)
     Path(output).write_text(body, encoding="utf-8")
-    console.print(f"[green]\u2713[/] Written to {output}")
+    console.print(f"[green]Y[/] Written to {output}")
 
 
 # ======================================================================
@@ -1681,7 +1681,7 @@ def analyze(
             "issues": [i.__dict__ if hasattr(i, '__dict__') else {} for i in report.issues],
             "summary": report.summary(),
         }, indent=2, default=str), encoding="utf-8")
-        console.print(f"[green]\u2713[/] Report written to {output}")
+        console.print(f"[green]Y[/] Report written to {output}")
 
 
 # ======================================================================
@@ -1720,7 +1720,7 @@ def repo(
         incremental=True,
     )
     result = convert_repository(input, output, config=config)
-    console.print("[green]\u2713[/] Repository converted")
+    console.print("[green]Y[/] Repository converted")
     console.print(
         f"  Total: {result.total_files}, "
         f"Converted: {result.converted}, "
@@ -1729,7 +1729,7 @@ def repo(
     )
     if result.errors:
         for path, err in result.errors[:10]:
-            console.print(f"  [red]\u2717[/] {path}: {err}")
+            console.print(f"  [red]X[/] {path}: {err}")
 
 
 # ======================================================================
@@ -1905,7 +1905,7 @@ def build(
                 generate_toc=data.get("toc", True),
                 cover_page=data.get("cover", False),
             )
-            console.print(f"[green]\u2713[/] Project built: {out}")
+            console.print(f"[green]Y[/] Project built: {out}")
         except Exception as exc:
             display_error("Build failed", str(exc))
             raise typer.Exit(code=1) from exc
@@ -1923,7 +1923,7 @@ def build(
                 merge=True,
                 output_format=format,
             )
-            console.print(f"[green]\u2713[/] Project built: {out}")
+            console.print(f"[green]Y[/] Project built: {out}")
         except Exception as exc:
             display_error("Build failed", str(exc))
             raise typer.Exit(code=1) from exc
@@ -1993,7 +1993,7 @@ def accessibility_check(
 
     if report:
         report.write_text(result.to_markdown(), encoding="utf-8")
-        console.print(f"[green]\u2713[/] Report written to {report}")
+        console.print(f"[green]Y[/] Report written to {report}")
 
     if json_output:
         import json as _json
@@ -2034,7 +2034,7 @@ def accessibility_report(
     engine = AccessibilityEngine()
     result = engine.validate_file(input)
     output.write_text(result.to_markdown(), encoding="utf-8")
-    console.print(f"[green]\u2713[/] Accessibility report: {output}")
+    console.print(f"[green]Y[/] Accessibility report: {output}")
     console.print(f"  Score: {result.score:.0f}/100 — {'PASS' if result.valid else 'FAIL'}")
 
 
@@ -2061,7 +2061,7 @@ def plugin_install(
     mgr = PluginManager()
     try:
         mgr.install_plugin(name)
-        console.print(f"[green]\u2713[/] Plugin '{name}' installed")
+        console.print(f"[green]Y[/] Plugin '{name}' installed")
     except Exception as exc:
         display_error("Install failed", str(exc))
 
@@ -2076,7 +2076,7 @@ def plugin_enable(
 
     mgr = PluginManager()
     mgr.enable(name)
-    console.print(f"[green]\u2713[/] Plugin '{name}' enabled")
+    console.print(f"[green]Y[/] Plugin '{name}' enabled")
 
 
 @plugin_app.command(name="disable")
@@ -2089,7 +2089,7 @@ def plugin_disable(
 
     mgr = PluginManager()
     mgr.disable(name)
-    console.print(f"[yellow]\u2717[/] Plugin '{name}' disabled")
+    console.print(f"[yellow]X[/] Plugin '{name}' disabled")
 
 
 @plugin_app.command(name="list")
@@ -2130,11 +2130,11 @@ def plugin_doctor() -> None:
     results = mgr.doctor()
     for r in results:
         if r.get("status") == "ok":
-            console.print(f"  [green]\u2713[/] {r.get('check', '?')}")
+            console.print(f"  [green]Y[/] {r.get('check', '?')}")
         elif r.get("status") == "warn":
             console.print(f"  [yellow]![/] {r.get('check', '?')}: {r.get('message', '')}")
         else:
-            console.print(f"  [red]\u2717[/] {r.get('check', '?')}: {r.get('message', '')}")
+            console.print(f"  [red]X[/] {r.get('check', '?')}: {r.get('message', '')}")
 
 
 # ======================================================================

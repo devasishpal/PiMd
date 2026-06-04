@@ -69,7 +69,7 @@ class DocumentValidator:
 
     def validate_file(self, path: str | Path) -> ValidationReport:
         """Parse and validate a file directly."""
-        from pimd.converters.markdown import MarkdownConverter
+        from pimd.parsers.markdown_parser import MarkdownParser
 
         path = Path(path)
         if not path.is_file():
@@ -79,9 +79,9 @@ class DocumentValidator:
                 document_path=str(path),
             )
         content = path.read_text(encoding="utf-8")
-        converter = MarkdownConverter()
+        parser = MarkdownParser()
         try:
-            doc = converter.parse_text(content)
+            doc = parser.parse(content)
         except Exception as exc:
             return ValidationReport(
                 valid=False,

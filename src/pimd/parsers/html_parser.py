@@ -140,14 +140,32 @@ class HTMLParser:
 
         return blocks
 
+    @staticmethod
+    def _extract_alignment(tag: Tag) -> str | None:
+        style = tag.get("style", "")
+        if style:
+            for part in style.split(";"):
+                part = part.strip().lower()
+                if part.startswith("text-align:"):
+                    val = part.split(":", 1)[1].strip()
+                    if val in ("left", "center", "right", "justify"):
+                        return val
+        return None
+
     def _parse_heading(self, tag: Tag) -> Heading:
         level = int(tag.name[1])
         spans = self._inline_spans(tag)
-        return Heading(level=level, spans=spans)
+        return Heading(level=level, spans=spans, alignment=self._extract_alignment(tag))
 
     def _parse_paragraph(self, tag: Tag) -> Paragraph:
         spans = self._inline_spans(tag)
-        return Paragraph(spans=spans)
+        alignment = self._extract_alignment(tag)
+        classes = tag.get("class", [])
+        if isinstance(classes, str):
+            classes = classes.split()
+        if not alignment and "subtitle" in classes:
+            alignment = "center"
+        return Paragraph(spans=spans, alignment=alignment)
 
     def _parse_pre(self, tag: Tag) -> CodeBlock:
         code_tag = tag.find("code", recursive=False) if tag.find("code") else None
@@ -234,6 +252,35 @@ class HTMLParser:
         return Image(alt=alt, url=url, title=title)
 
     def _parse_container(self, tag: Tag) -> list[Block]:
+        classes = tag.get("class", [])
+        if isinstance(classes, str):
+            classes = classes.split()
+        classes = [c.lower() for c in classes]
+
+        # -- Map known class patterns to block types --
+        if "chapter-heading" in classes:
+            spans = self._inline_spans(tag)
+            return [Heading(level=2, spans=spans, alignment="center")]
+
+        if "chapter-break" in classes:
+            spans = self._inline_spans(tag)
+            text = "".join(s.text for s in spans).strip()
+            if text:
+                return [Paragraph(spans=spans, alignment="center")]
+            return [HorizontalRule()]
+
+        if "subtitle" in classes:
+            spans = self._inline_spans(tag)
+            return [Paragraph(spans=spans, alignment="center")]
+
+        if "dialogue" in classes:
+            children = self._parse_blocks(tag)
+            return [Blockquote(children=children)]
+
+        if "description" in classes:
+            children = self._parse_blocks(tag)
+            return [Blockquote(children=children)]
+
         return self._parse_blocks(tag)
 
     def _parse_li_as_block(self, tag: Tag) -> list[Block]:

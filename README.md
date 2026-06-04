@@ -15,7 +15,7 @@
   <a href="https://pypi.org/project/pimd/"><img src="https://img.shields.io/pypi/dm/pimd" alt="Downloads"></a>
   <a href="https://github.com/devasishpal/PiMd/actions"><img src="https://img.shields.io/github/actions/workflow/status/devasishpal/PiMd/ci.yml?branch=main" alt="Build"></a>
   <a href="https://codecov.io/gh/devasishpal/PiMd"><img src="https://img.shields.io/codecov/c/github/devasishpal/PiMd" alt="Coverage"></a>
-  <a href="https://pimd.ai"><img src="https://img.shields.io/badge/docs-pimd.ai-blue" alt="Documentation"></a>
+  <a href="https://github.com/devasishpal/PiMd/tree/main/docs"><img src="https://img.shields.io/badge/docs-pimd.ai-blue" alt="Documentation"></a>
 </p>
 
 ---
@@ -185,21 +185,34 @@ Built-in engine checks for WCAG 1.1.1 (alt text), 1.3.1 (table headers), 2.4.10 
 
 ### Installation
 
+**From source (current — pre-PyPI):**
+
+```bash
+git clone https://github.com/devasishpal/PiMd.git
+cd PiMd
+pip install -e .                    # Core only
+pip install -e ".[all]"             # Core + all optional features
+```
+
+**From PyPI (future release):**
+
 ```bash
 pip install pimd
 ```
 
-With optional dependencies:
+Optional extras:
 
 ```bash
-pip install "pimd[diagrams]"      # Diagram rendering (Pillow)
-pip install "pimd[equations]"     # Equation rendering (matplotlib)
-pip install "pimd[export]"        # PDF export
-pip install "pimd[citations]"     # BibTeX support
-pip install "pimd[redis]"         # Redis cache backend
-pip install "pimd[profiling]"     # Performance profiling
+pip install "pimd[diagrams]"       # Diagram rendering (Pillow)
+pip install "pimd[equations]"      # Equation rendering (matplotlib)
+pip install "pimd[export]"         # PDF export
+pip install "pimd[citations]"      # BibTeX support
+pip install "pimd[redis]"          # Redis cache backend
+pip install "pimd[profiling]"      # Performance profiling
 pip install "pimd[all]"            # Everything
 ```
+
+All core dependencies (`markdown-it-py`, `mdit-py-plugins`, `python-docx`, `beautifulsoup4`, `lxml`, `typer`, `rich`, `pyyaml`) auto-install — no manual steps needed.
 
 ### Python API
 

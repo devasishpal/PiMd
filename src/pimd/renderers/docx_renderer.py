@@ -433,7 +433,11 @@ class DocxRenderer:
     def _render_heading(self, block: Heading) -> None:
         level = min(max(block.level, 1), 6)
         text = sanitize_text(block.plain_text())
-        self._doc.add_heading(text, level=level)
+        p = self._doc.add_heading(text, level=level)
+        if block.alignment:
+            align_map = {"left": 0, "center": 1, "right": 2, "justify": 3}
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            p.alignment = getattr(WD_ALIGN_PARAGRAPH, block.alignment.upper(), None)
 
     # ------------------------------------------------------------------
     # Paragraph + spans
@@ -443,6 +447,10 @@ class DocxRenderer:
     def _render_paragraph(doc: DocxDocument, block: Paragraph) -> None:
         p = doc.add_paragraph(style="Normal")
         p.paragraph_format.space_after = Pt(6)
+        if block.alignment:
+            align_map = {"left": 0, "center": 1, "right": 2, "justify": 3}
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            p.alignment = getattr(WD_ALIGN_PARAGRAPH, block.alignment.upper(), None)
         DocxRenderer._add_spans_to_paragraph(p, block.spans)
 
     @staticmethod
@@ -467,6 +475,20 @@ class DocxRenderer:
                 run.italic = span.italic
                 if span.underline:
                     run.underline = True
+                if span.superscript:
+                    DocxRenderer._apply_vert_align(run, "superscript")
+                if span.subscript:
+                    DocxRenderer._apply_vert_align(run, "subscript")
+
+    @staticmethod
+    def _apply_vert_align(run: DocxRun, kind: str) -> None:
+        """Set superscript or subscript on a run via w:vertAlign."""
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+        rPr = run._r.get_or_add_rPr()
+        vert = OxmlElement("w:vertAlign")
+        vert.set(qn("w:val"), kind)
+        rPr.append(vert)
 
     @staticmethod
     def _add_hyperlink(paragraph: DocxParagraph, text: str, url: str) -> None:
@@ -736,116 +758,38 @@ class DocxRenderer:
         p.paragraph_format.space_after = Pt(3)
 
         img_stream = io.BytesIO(img_data)
+        bookmark_id = None
+        bookmark_name = None
         try:
-            run = p.add_run()
-            inline = run._r
-            drawing = OxmlElement("w:drawing")
-            inline.append(drawing)
+            img_stream.seek(0)
+            inline_shape = p.add_run().add_picture(img_stream, width=_IMAGE_MAX_WIDTH)
 
-            wp = OxmlElement("wp:inline")
-            wp.set(qn("xmlns:wp"), "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing")
-            wp.set(qn("distT"), "0")
-            wp.set(qn("distB"), "0")
-            wp.set(qn("distL"), "0")
-            wp.set(qn("distR"), "0")
-
-            extent = OxmlElement("wp:extent")
-            extent.set(qn("cx"), cx)
-            extent.set(qn("cy"), cy)
-            wp.append(extent)
-
-            effect_extent = OxmlElement("wp:effectExtent")
-            effect_extent.set(qn("l"), "0")
-            effect_extent.set(qn("t"), "0")
-            effect_extent.set(qn("r"), "0")
-            effect_extent.set(qn("b"), "0")
-            wp.append(effect_extent)
-
-            # Bookmark for cross-references
             self._figure_counter += 1
             bookmark_id = self._figure_counter + 1000
             bookmark_name = f"fig_{self._figure_counter}"
 
-            doc_pr = OxmlElement("wp:docPr")
-            doc_pr.set(qn("id"), str(self._figure_counter))
-            doc_pr.set(qn("name"), f"Diagram {block.language}")
-            if block.caption:
-                doc_pr.set(qn("descr"), sanitize_text(block.caption))
-            wp.append(doc_pr)
+            inline = inline_shape._inline
+            wp = inline.find(qn("wp:extent")).getparent()
 
-            c_nv_pr = OxmlElement("wp:cNvGraphicFramePr")
-            graphic_frame = OxmlElement("a:graphicFrameLocks")
-            graphic_frame.set(qn("xmlns:a"), "http://schemas.openxmlformats.org/drawingml/2006/main")
-            graphic_frame.set(qn("noChangeAspect"), "1")
-            c_nv_pr.append(graphic_frame)
-            wp.append(c_nv_pr)
+            extent = wp.find(qn("wp:extent"))
+            if extent is not None:
+                extent.set("cx", cx)
+                extent.set("cy", cy)
 
-            graphic = OxmlElement("a:graphic")
-            graphic.set(qn("xmlns:a"), "http://schemas.openxmlformats.org/drawingml/2006/main")
-
-            graphic_data = OxmlElement("a:graphicData")
-            graphic_data.set(qn("uri"), "http://schemas.openxmlformats.org/drawingml/2006/picture")
-
-            pic = OxmlElement("pic:pic")
-            pic.set(qn("xmlns:pic"), "http://schemas.openxmlformats.org/drawingml/2006/picture")
-
-            nv_pic_pr = OxmlElement("pic:nvPicPr")
-            c_nv_pr_pic = OxmlElement("pic:cNvPr")
-            c_nv_pr_pic.set(qn("id"), "0")
-            c_nv_pr_pic.set(qn("name"), f"Diagram_{block.language}")
-            nv_pic_pr.append(c_nv_pr_pic)
-            c_nv_pic_pr_pic = OxmlElement("pic:cNvPicPr")
-            nv_pic_pr.append(c_nv_pic_pr_pic)
-            pic.append(nv_pic_pr)
-
-            blip_fill = OxmlElement("pic:blipFill")
-            blip = OxmlElement("a:blip")
-            r_id = p.part.relate_to(
-                img_stream,
-                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-                is_external=False,
-            )
-            blip.set(qn("r:embed"), r_id)
-            blip_fill.append(blip)
-            stretch = OxmlElement("a:stretch")
-            fill_rect = OxmlElement("a:fillRect")
-            stretch.append(fill_rect)
-            blip_fill.append(stretch)
-            pic.append(blip_fill)
-
-            sp_pr = OxmlElement("pic:spPr")
-            xfrm = OxmlElement("a:xfrm")
-            off = OxmlElement("a:off")
-            off.set(qn("x"), "0")
-            off.set(qn("y"), "0")
-            xfrm.append(off)
-            ext = OxmlElement("a:ext")
-            ext.set(qn("cx"), cx)
-            ext.set(qn("cy"), cy)
-            xfrm.append(ext)
-            sp_pr.append(xfrm)
-            prst_geom = OxmlElement("a:prstGeom")
-            prst_geom.set(qn("prst"), "rect")
-            sp_pr.append(prst_geom)
-            pic.append(sp_pr)
-
-            graphic_data.append(pic)
-            graphic.append(graphic_data)
-            wp.append(graphic)
-            drawing.append(wp)
+            doc_pr = wp.find(qn("wp:docPr"))
+            if doc_pr is not None:
+                doc_pr.set("id", str(self._figure_counter))
+                doc_pr.set("name", f"Diagram {block.language}")
+                if block.caption:
+                    doc_pr.set("descr", sanitize_text(block.caption))
 
         except Exception as exc:
-            logger.warning("Failed to embed diagram via XML, falling back: %s", exc)
-            try:
-                img_stream.seek(0)
-                doc.add_picture(img_stream, width=_IMAGE_MAX_WIDTH)
-            except Exception as exc2:
-                logger.warning("Failed to embed diagram: %s", exc2)
-                p2 = doc.add_paragraph(style="Normal")
-                p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                run2 = p2.add_run(sanitize_text(f"[Diagram: {block.alt}]"))
-                run2.italic = True
-                run2.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
+            logger.warning("Failed to embed diagram: %s", exc)
+            p2 = doc.add_paragraph(style="Normal")
+            p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run2 = p2.add_run(sanitize_text(f"[Diagram: {block.alt}]"))
+            run2.italic = True
+            run2.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
 
         # -- Error message below diagram --
         if block.error:
@@ -858,7 +802,7 @@ class DocxRenderer:
             err_p.paragraph_format.space_after = Pt(6)
 
         # -- Caption with figure numbering + bookmark for cross-references --
-        if block.caption:
+        if block.caption and bookmark_id is not None:
             cap = doc.add_paragraph(style="Normal")
             cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
             cap.paragraph_format.space_before = Pt(2)

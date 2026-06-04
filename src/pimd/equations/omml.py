@@ -97,8 +97,8 @@ def _mk_run_bold(text: str) -> Any:
     """Create a bold OMML run."""
     r = _m("r")
     rPr = _m("rPr")
-    b = _m("lit")
-    b.set(qn("m:val"), "1")
+    b = _m("sty")
+    b.set(qn("m:val"), "b")
     rPr.append(b)
     r.append(rPr)
     t = _m("t")

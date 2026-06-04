@@ -35,12 +35,19 @@ logger = get_logger(__name__)
 class MarkdownParser:
     """Parse Markdown content into PiMD's intermediate document model.
 
-    Uses ``markdown-it-py`` under the hood with the default CommonMark preset.
+    Uses ``markdown-it-py`` under the hood with the default CommonMark preset,
+    plus superscript (^...^) and subscript (~...~) via mdit-py-plugins.
     """
 
     def __init__(self) -> None:
         self._md: MarkdownIt = MarkdownIt("commonmark", {"maxNesting": 100})
         self._md.enable(["table", "linkify"])
+        try:
+            from mdit_py_plugins.superscript import superscript_plugin
+            from mdit_py_plugins.subscript import sub_plugin
+            self._md.use(superscript_plugin).use(sub_plugin)
+        except ImportError:
+            pass
 
     # ------------------------------------------------------------------
     # Public API
@@ -265,6 +272,22 @@ class MarkdownParser:
                 inner = self._parse_inline_children(children, i + 1, close)
                 for s in inner:
                     s.italic = True
+                spans.extend(inner)
+                i = close + 1
+
+            elif child.type == "sup_open":
+                close = self._find_inline_close(children, i, "sup_open", "sup_close")
+                inner = self._parse_inline_children(children, i + 1, close)
+                for s in inner:
+                    s.superscript = True
+                spans.extend(inner)
+                i = close + 1
+
+            elif child.type == "sub_open":
+                close = self._find_inline_close(children, i, "sub_open", "sub_close")
+                inner = self._parse_inline_children(children, i + 1, close)
+                for s in inner:
+                    s.subscript = True
                 spans.extend(inner)
                 i = close + 1
 

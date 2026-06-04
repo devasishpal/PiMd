@@ -22,6 +22,13 @@ class BatchResult:
     duration: float = 0.0
     results: list[ExportResult] = field(default_factory=list)
 
+    def summary(self) -> str:
+        """Return a human-readable summary of the batch run."""
+        return (
+            f"Processed {self.total} files: {self.succeeded} succeeded, "
+            f"{self.failed} failed in {self.duration:.2f}s"
+        )
+
 
 class BatchProcessor:
     """Process multiple input files in parallel across formats."""

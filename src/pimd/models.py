@@ -24,6 +24,8 @@ class Span:
     underline: bool = False
     code: bool = False
     link_url: str | None = None
+    superscript: bool = False
+    subscript: bool = False
     math: str | None = None
     math_display: bool = False
     omml: object | None = None  # OMML XML element
@@ -40,6 +42,7 @@ class Heading:
 
     level: int
     spans: list[Span]
+    alignment: str | None = None
 
     def plain_text(self) -> str:
         return "".join(s.text for s in self.spans)
@@ -50,6 +53,7 @@ class Paragraph:
     """A plain paragraph with inline formatting."""
 
     spans: list[Span]
+    alignment: str | None = None
 
     def plain_text(self) -> str:
         return "".join(s.text for s in self.spans)
