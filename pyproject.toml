@@ -69,7 +69,10 @@ profiling = [
     "psutil>=5.9.0",
 ]
 all = [
-    "pimd[dev,diagrams,equations,export,citations,redis,profiling]",
+    "pimd[diagrams,equations,export,citations,redis,profiling]",
+]
+full = [
+    "pimd[all,dev]",
 ]
 
 [project.urls]

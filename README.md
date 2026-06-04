@@ -194,13 +194,15 @@ pip install -e .                    # Core only
 pip install -e ".[all]"             # Core + all optional features
 ```
 
-**From PyPI (future release):**
+**From PyPI:**
 
 ```bash
-pip install pimd
+pip install pimd                      # Core only (CLI + basic conversion)
+pip install "pimd[all]"               # Core + all runtime features
+pip install "pimd[full]"              # Everything including dev tools
 ```
 
-Optional extras:
+Optional extras can be combined individually:
 
 ```bash
 pip install "pimd[diagrams]"       # Diagram rendering (Pillow)
@@ -209,10 +211,9 @@ pip install "pimd[export]"         # PDF export
 pip install "pimd[citations]"      # BibTeX support
 pip install "pimd[redis]"          # Redis cache backend
 pip install "pimd[profiling]"      # Performance profiling
-pip install "pimd[all]"            # Everything
 ```
 
-All core dependencies (`markdown-it-py`, `mdit-py-plugins`, `python-docx`, `beautifulsoup4`, `lxml`, `typer`, `rich`, `pyyaml`) auto-install — no manual steps needed.
+All core dependencies (`markdown-it-py`, `mdit-py-plugins`, `python-docx`, `beautifulsoup4`, `lxml`, `typer`, `rich`, `pyyaml`) auto-install with any variant — no manual steps needed.
 
 ### Python API
 
