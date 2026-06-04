@@ -14,8 +14,8 @@
   <a href="https://github.com/devasishpal/PiMd/blob/main/LICENSE"><img src="https://img.shields.io/github/license/devasishpal/PiMd" alt="License"></a>
   <a href="https://pypi.org/project/pimd/"><img src="https://img.shields.io/pypi/dm/pimd" alt="Downloads"></a>
   <a href="https://github.com/devasishpal/PiMd/actions"><img src="https://img.shields.io/github/actions/workflow/status/devasishpal/PiMd/ci.yml?branch=main" alt="Build"></a>
-  <a href="https://codecov.io/gh/devasishpal/PiMd"><img src="https://img.shields.io/codecov/c/github/devasishpal/PiMd" alt="Coverage"></a>
-  <a href="https://github.com/devasishpal/PiMd/tree/main/docs"><img src="https://img.shields.io/badge/docs-pimd.ai-blue" alt="Documentation"></a>
+  <a href="https://github.com/devasishpal/PiMd/actions"><img src="https://img.shields.io/github/actions/workflow/status/devasishpal/PiMd/ci.yml?branch=main&label=tests" alt="Tests"></a>
+  <a href="https://github.com/devasishpal/PiMd/blob/main/CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-v2.0.0-blue" alt="Changelog"></a>
 </p>
 
 ---
