@@ -4,15 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pimd"
-version = "2.0.0"
-description = "Professional document publishing platform — Markdown, HTML, diagrams, equations, templates, and multi-format export"
+version = "2.1.0"
+description = "Professional document publishing platform — Markdown, HTML, diagrams, equations, templates, EPUB, LaTeX, PDF/A, i18n, multi-format export"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
 authors = [
     { name = "PiMD Contributors" },
 ]
-keywords = ["markdown", "html", "docx", "converter", "document", "publishing"]
+keywords = ["markdown", "html", "docx", "epub", "latex", "pdfa", "converter", "document", "publishing", "i18n", "rtl"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -68,8 +68,20 @@ redis = [
 profiling = [
     "psutil>=5.9.0",
 ]
+epub = [
+    "lxml>=5.0.0",
+]
+latex = []
+pdfa = [
+    "fpdf2>=2.7.0",
+]
+i18n = [
+    "bidi>=0.4.0",
+    "arabic_reshaper>=3.0.0",
+]
+collaboration = []
 all = [
-    "pimd[diagrams,equations,export,citations,redis,profiling]",
+    "pimd[diagrams,equations,export,citations,redis,profiling,epub,latex,pdfa,i18n,collaboration]",
 ]
 full = [
     "pimd[all,dev]",

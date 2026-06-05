@@ -1,4 +1,4 @@
-"""Multi-format export converter — convert to DOCX, PDF, HTML, MD, RTF, ODT, TXT."""
+"""Multi-format export converter — docx, pdf, html, md, rtf, odt, txt, epub, latex, pdfa."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from pimd.export.models import ExportFormat, ExportOptions, ExportResult
-from pimd.export.pdf import convert_to_pdf
+from pimd.export.pdf import convert_to_pdf, convert_to_pdfa
 
 
 class ExportConverter:
@@ -34,9 +34,9 @@ class ExportConverter:
 
         Args:
             input_path: Path to the input file (MD or HTML).
-            output_format: Target format (docx, pdf, html, md, rtf, odt, txt).
+            output_format: Target format (docx, pdf, html, md, rtf, odt, txt, epub, latex, pdfa).
             output_path: Optional explicit output path. Auto-derived if omitted.
-            **overrides: Additional export options (template, brand, cover_page, etc.).
+            **overrides: Additional export options.
 
         Returns:
             ExportResult with output path and status.
@@ -65,6 +65,31 @@ class ExportConverter:
                 engine=opts.pdf_engine,
             )
 
+        if fmt == ExportFormat.PDFA:
+            docx_path = out_dir / f"{inp.stem}_temp.docx"
+            result = self._convert_to_docx(engine, inp, docx_path, input_ext, opts)
+            if not result.success:
+                return result
+            pdf_out = Path(output_path) if output_path else (out_dir / f"{inp.stem}.pdf")
+            return convert_to_pdfa(
+                docx_path,
+                pdf_out,
+                level=opts.pdfa_level,
+                embed_fonts=opts.pdfa_embed_fonts,
+                title=opts.metadata.get("title", inp.stem),
+                author=opts.metadata.get("author", ""),
+            )
+
+        # EPUB
+        if fmt == ExportFormat.EPUB:
+            out_path = Path(output_path) if output_path else (out_dir / f"{inp.stem}.epub")
+            return self._convert_to_epub(engine, inp, out_path, input_ext, opts)
+
+        # LaTeX
+        if fmt == ExportFormat.LATEX:
+            out_path = Path(output_path) if output_path else (out_dir / f"{inp.stem}.tex")
+            return self._convert_to_latex(engine, inp, out_path, input_ext, opts)
+
         # Direct formats
         fmt_map: dict[ExportFormat, str] = {
             ExportFormat.DOCX: ".docx",
@@ -84,7 +109,6 @@ class ExportConverter:
         elif fmt == ExportFormat.TXT:
             result = self._convert_to_text(inp, out_path)
         elif fmt in (ExportFormat.RTF, ExportFormat.ODT):
-            # Produce DOCX first, then convert externally
             docx_path = out_dir / f"{inp.stem}_temp.docx"
             dresult = self._convert_to_docx(engine, inp, docx_path, input_ext, opts)
             if not dresult.success:
@@ -135,14 +159,13 @@ class ExportConverter:
             )
 
     def _convert_to_html(self, engine: Any, inp: Path, out_path: Path, ext: str) -> ExportResult:
-        """Convert a DOCX or MD file back to HTML."""
+        """Convert a MD file to HTML."""
         try:
-            from pimd.converters.markdown import MarkdownConverter
+            from pimd.parsers.markdown_parser import MarkdownParser
             from pimd.renderers.html_renderer import HtmlRenderer
 
             if ext in (".md", ".markdown"):
-                converter = MarkdownConverter()
-                doc = converter.parse_text(inp.read_text(encoding="utf-8"))
+                doc = MarkdownParser().parse(inp.read_text(encoding="utf-8"))
             elif ext in (".html", ".htm"):
                 out_path.write_text(inp.read_text(encoding="utf-8"), encoding="utf-8")
                 return ExportResult(output_path=out_path, format=ExportFormat.HTML, success=True)
@@ -171,11 +194,9 @@ class ExportConverter:
             if inp.suffix.lower() in (".md", ".markdown"):
                 out_path.write_text(inp.read_text(encoding="utf-8"), encoding="utf-8")
             else:
-                # Remove HTML tags for plain text → basic md
-                from pimd.converters.markdown import MarkdownConverter
+                from pimd.parsers.markdown_parser import MarkdownParser
 
-                converter = MarkdownConverter()
-                doc = converter.parse_text(inp.read_text(encoding="utf-8"))
+                doc = MarkdownParser().parse(inp.read_text(encoding="utf-8"))
                 md_lines: list[str] = []
                 for block in doc.blocks:
                     md_lines.append(block.plain_text() + "\n")
@@ -192,10 +213,9 @@ class ExportConverter:
     def _convert_to_text(self, inp: Path, out_path: Path) -> ExportResult:
         """Strip all formatting and output plain text."""
         try:
-            from pimd.converters.markdown import MarkdownConverter
+            from pimd.parsers.markdown_parser import MarkdownParser
 
-            converter = MarkdownConverter()
-            doc = converter.parse_text(inp.read_text(encoding="utf-8"))
+            doc = MarkdownParser().parse(inp.read_text(encoding="utf-8"))
             text_lines: list[str] = []
             for block in doc.blocks:
                 text_lines.append(block.plain_text())
@@ -205,6 +225,82 @@ class ExportConverter:
             return ExportResult(
                 output_path=out_path,
                 format=ExportFormat.TXT,
+                success=False,
+                error=str(exc),
+            )
+
+    def _convert_to_epub(
+        self,
+        engine: Any,
+        inp: Path,
+        out_path: Path,
+        ext: str,
+        opts: ExportOptions,
+    ) -> ExportResult:
+        """Convert input to EPUB."""
+        try:
+            from pimd.export.formats.epub import EpubRenderer
+            from pimd.parsers.markdown_parser import MarkdownParser
+
+            text = inp.read_text(encoding="utf-8")
+            doc = MarkdownParser().parse(text)
+
+            renderer = EpubRenderer(css_path=opts.epub_css)
+            renderer.render(
+                doc,
+                out_path,
+                title=opts.metadata.get("title", inp.stem),
+                author=opts.metadata.get("author", ""),
+                language=opts.language,
+                cover_image=opts.epub_cover_image,
+            )
+            return ExportResult(
+                output_path=out_path,
+                format=ExportFormat.EPUB,
+                success=True,
+            )
+        except Exception as exc:
+            return ExportResult(
+                output_path=out_path,
+                format=ExportFormat.EPUB,
+                success=False,
+                error=str(exc),
+            )
+
+    def _convert_to_latex(
+        self,
+        engine: Any,
+        inp: Path,
+        out_path: Path,
+        ext: str,
+        opts: ExportOptions,
+    ) -> ExportResult:
+        """Convert input to LaTeX."""
+        try:
+            from pimd.export.formats.latex import LatexRenderer
+            from pimd.parsers.markdown_parser import MarkdownParser
+
+            text = inp.read_text(encoding="utf-8")
+            doc = MarkdownParser().parse(text)
+
+            renderer = LatexRenderer()
+            renderer.render(
+                doc,
+                out_path,
+                title=opts.metadata.get("title", inp.stem),
+                author=opts.metadata.get("author", ""),
+                document_class=opts.latex_document_class,
+                generate_toc=opts.generate_toc,
+            )
+            return ExportResult(
+                output_path=out_path,
+                format=ExportFormat.LATEX,
+                success=True,
+            )
+        except Exception as exc:
+            return ExportResult(
+                output_path=out_path,
+                format=ExportFormat.LATEX,
                 success=False,
                 error=str(exc),
             )
@@ -235,11 +331,19 @@ class ExportConverter:
                 timeout=120,
             )
             expected = out_path.parent / f"{docx_path.stem}.{target_ext}"
+            if out_path.exists() or expected.is_file():
+                final = out_path if out_path.exists() else expected
+                if final != out_path and out_path.suffix == f".{target_ext}":
+                    import shutil
+                    shutil.move(str(expected), str(out_path))
+                    final = out_path
+            else:
+                final = out_path
             return ExportResult(
-                output_path=out_path if out_path.exists() else expected,
+                output_path=final,
                 format=fmt,
-                success=expected.is_file() or out_path.exists(),
-                error=proc.stderr.strip() if not expected.is_file() else None,
+                success=final.is_file(),
+                error=proc.stderr.strip() if not final.is_file() else None,
             )
         except Exception as exc:
             return ExportResult(

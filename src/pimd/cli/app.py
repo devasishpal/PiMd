@@ -323,11 +323,16 @@ def info() -> None:
         "Version": __version__,
         "Python": sys.version.split()[0],
         "Platform": sys.platform,
-        "Supported formats": "DOCX, PDF, HTML, MD, RTF, ODT, TXT",
+        "Supported formats": "DOCX, PDF, PDF/A, EPUB, LaTeX, HTML, MD, RTF, ODT, TXT",
         "Installed templates": "professional, academic, technical, business, book, proposal, invoice, resume, manual, api",
         "Report types": "executive, technical, audit, project, research, compliance, architecture",
         "Citation styles": "APA, IEEE, MLA, Chicago, Harvard",
         "Default theme": ProfessionalTheme().name,
+        "EPUB": "Supported (v2.1.0)",
+        "LaTeX": "Supported (v2.1.0)",
+        "PDF/A": "Supported (v2.1.0)",
+        "i18n": "RTL, CJK, Unicode (v2.1.0)",
+        "Collaborative editing": "Revisions, comments, annotations (v2.1.0)",
         "Config location": str(import_path("pimd.cli.config").get_config_path()),
     }
 
@@ -1027,6 +1032,8 @@ def export_doctor() -> None:
     from pimd.export.pdf import doctor as pdf_doctor
 
     show_sub_banner("export doctor")
+
+    # PDF engines
     results = pdf_doctor()
     rows = [
         {
@@ -1036,6 +1043,46 @@ def export_doctor() -> None:
         }
         for r in results
     ]
+
+    # EPUB
+    try:
+        from pimd.export.formats.epub import EpubRenderer
+        er = EpubRenderer()
+        rows.append({
+            "check": "EPUB renderer",
+            "status": "ok" if er.is_available else "warning",
+            "detail": "Available" if er.is_available else f"Missing: {', '.join(er.missing_dependencies)}",
+        })
+    except Exception:
+        rows.append({"check": "EPUB renderer", "status": "warning", "detail": "Not available"})
+
+    # LaTeX
+    try:
+        from pimd.export.formats.latex import LatexRenderer
+        lr = LatexRenderer()
+        rows.append({
+            "check": "LaTeX renderer",
+            "status": "ok" if lr.is_available else "warning",
+            "detail": "Available" if lr.is_available else "Not available",
+        })
+    except Exception:
+        rows.append({"check": "LaTeX renderer", "status": "warning", "detail": "Not available"})
+
+    # PDF/A
+    try:
+        import fpdf2  # noqa: F401
+        rows.append({"check": "PDF/A (fpdf2)", "status": "ok", "detail": "Available"})
+    except ImportError:
+        rows.append({"check": "PDF/A (fpdf2)", "status": "warning", "detail": "Not installed — use LibreOffice as fallback"})
+
+    # i18n
+    for mod_name in ("bidi", "arabic_reshaper"):
+        try:
+            __import__(mod_name)
+            rows.append({"check": f"i18n ({mod_name})", "status": "ok", "detail": "Available"})
+        except ImportError:
+            rows.append({"check": f"i18n ({mod_name})", "status": "info", "detail": "Optional — install for RTL support"})
+
     doctor_table(rows)
 
 
@@ -2177,6 +2224,346 @@ def import_path(mod_name: str) -> object:
     import importlib
 
     return importlib.import_module(mod_name)
+
+
+# ======================================================================
+# pimd epub
+# ======================================================================
+
+
+@app.command()
+def epub(
+    input: Path = typer.Argument(
+        ...,
+        help="Path to input .md file",
+        exists=True,
+        dir_okay=False,
+    ),
+    output: Path = typer.Argument(
+        ...,
+        help="Path to output .epub file",
+    ),
+    title: str | None = typer.Option(None, "--title", help="Book title"),
+    author: str | None = typer.Option(None, "--author", help="Author name"),
+    language: str = typer.Option("en", "--language", "-l", help="Language code"),
+    css: str | None = typer.Option(None, "--css", help="Path to custom CSS file"),
+    cover: str | None = typer.Option(None, "--cover", help="Cover image path"),
+    validate: bool = typer.Option(
+        False, "--validate", help="Validate EPUB after generation"
+    ),
+) -> None:
+    """Convert a Markdown file to EPUB 3.2 e-book format."""
+    show_sub_banner("epub")
+    from pimd.export.formats.epub import EpubRenderer, validate_epub
+    from pimd.parsers.markdown_parser import MarkdownParser
+
+    steps = StepDisplay()
+    steps.add("Reading file")
+    steps.add("Parsing")
+    steps.add("Rendering EPUB")
+    steps.add("Writing EPUB")
+
+    try:
+        steps.start("Reading file")
+        text = input.read_text(encoding="utf-8")
+        steps.succeed("Reading file")
+
+        steps.start("Parsing")
+        doc = MarkdownParser().parse(text)
+        steps.succeed("Parsing")
+
+        steps.start("Rendering EPUB")
+        renderer = EpubRenderer(css_path=css)
+        renderer.render(
+            doc,
+            output,
+            title=title or input.stem,
+            author=author or "",
+            language=language,
+            cover_image=cover,
+        )
+        steps.succeed("Rendering EPUB")
+
+        steps.start("Writing EPUB")
+        steps.succeed("Writing EPUB")
+        console.print(f"[green]Y[/] EPUB generated: {output}")
+
+        if validate:
+            issues = validate_epub(output)
+            if issues:
+                console.print("\n[red]X[/] EPUB validation issues:")
+                for issue in issues:
+                    console.print(f"  [red]-[/] {issue}")
+            else:
+                console.print("[green]Y[/] EPUB validation passed")
+
+    except Exception as exc:
+        steps.fail("Rendering EPUB")
+        display_error("EPUB Error", str(exc))
+        raise typer.Exit(code=1) from exc
+
+
+# ======================================================================
+# pimd latex
+# ======================================================================
+
+
+@app.command()
+def latex(
+    input: Path = typer.Argument(
+        ...,
+        help="Path to input .md file",
+        exists=True,
+        dir_okay=False,
+    ),
+    output: Path = typer.Argument(
+        ...,
+        help="Path to output .tex file",
+    ),
+    title: str | None = typer.Option(None, "--title", help="Document title"),
+    author: str | None = typer.Option(None, "--author", help="Author name"),
+    doc_class: str = typer.Option(
+        "article",
+        "--class",
+        help="Document class (article, report, book)",
+    ),
+    toc: bool = typer.Option(False, "--toc", help="Generate table of contents"),
+) -> None:
+    """Convert a Markdown file to LaTeX format."""
+    show_sub_banner("latex")
+    from pimd.export.formats.latex import LatexRenderer
+    from pimd.parsers.markdown_parser import MarkdownParser
+
+    steps = StepDisplay()
+    steps.add("Reading file")
+    steps.add("Parsing")
+    steps.add("Rendering LaTeX")
+    steps.add("Writing LaTeX")
+
+    try:
+        steps.start("Reading file")
+        text = input.read_text(encoding="utf-8")
+        steps.succeed("Reading file")
+
+        steps.start("Parsing")
+        doc = MarkdownParser().parse(text)
+        steps.succeed("Parsing")
+
+        steps.start("Rendering LaTeX")
+        renderer = LatexRenderer()
+        renderer.render(
+            doc,
+            output,
+            title=title or input.stem,
+            author=author or "",
+            document_class=doc_class,
+            generate_toc=toc,
+        )
+        steps.succeed("Rendering LaTeX")
+
+        steps.start("Writing LaTeX")
+        steps.succeed("Writing LaTeX")
+        console.print(f"[green]Y[/] LaTeX generated: {output}")
+
+    except Exception as exc:
+        steps.fail("Rendering LaTeX")
+        display_error("LaTeX Error", str(exc))
+        raise typer.Exit(code=1) from exc
+
+
+# ======================================================================
+# pimd language (i18n)
+# ======================================================================
+
+
+@app.command()
+def language(
+    input: Path = typer.Argument(
+        ...,
+        help="Input file to detect language/script of",
+        exists=True,
+    ),
+) -> None:
+    """Detect script/language direction of a document."""
+    show_sub_banner("language")
+    from pimd.i18n import ScriptType, detect_script, is_rtl_language, is_cjk_language
+
+    text = input.read_text(encoding="utf-8")
+    script = detect_script(text)
+
+    data = {
+        "Script direction": script.value,
+        "File": str(input),
+        "Size": f"{len(text)} chars",
+    }
+
+    if script == ScriptType.RTL:
+        data["Note"] = "Right-to-left — Arabic, Hebrew, Persian, Urdu"
+        data["RTL language match"] = "Yes" if any(is_rtl_language(l) for l in ["ar", "he", "fa", "ur"]) else "No"
+    elif script == ScriptType.CJK:
+        data["Note"] = "CJK — Chinese, Japanese, Korean"
+    else:
+        data["Note"] = "Left-to-right — Latin-based"
+
+    info_table(data)
+
+
+# ======================================================================
+# pimd revision (collaborative editing)
+# ======================================================================
+
+revision_cmd = typer.Typer(
+    name="revision",
+    help="Track and manage document revisions (collaborative editing)",
+    no_args_is_help=True,
+)
+app.add_typer(revision_cmd, name="revision")
+
+
+@revision_cmd.command(name="init")
+def revision_init(
+    document_id: str = typer.Option("", "--id", help="Document ID"),
+    title: str = typer.Option("", "--title", "-t", help="Document title"),
+) -> None:
+    """Initialize a new revision tracker for a document."""
+    show_sub_banner("revision init")
+    from pimd.revisions import RevisionTracker
+
+    tracker = RevisionTracker(document_id=document_id, title=title)
+    summary = tracker.export_review_summary()
+    console.print(f"[green]Y[/] Revision tracker initialized")
+    console.print(f"  Document ID: {summary['document_id']}")
+    console.print(f"  Title: {summary['title'] or '(untitled)'}")
+    console.print(f"  Created: {summary['created_at']}")
+
+
+@revision_cmd.command(name="add")
+def revision_add(
+    type: str = typer.Argument(
+        ..., help="Revision type (insertion, deletion, replacement, formatting)"
+    ),
+    author: str = typer.Option("", "--author", "-a", help="Author name"),
+    description: str = typer.Option("", "--desc", "-d", help="Description"),
+) -> None:
+    """Add a tracked revision (demo / placeholder)."""
+    show_sub_banner("revision add")
+    from pimd.revisions import RevisionTracker, RevisionType
+
+    rev_type = RevisionType(type.lower())
+    tracker = RevisionTracker()
+    rev = tracker.add_revision(
+        revision_type=rev_type,
+        author=author or "anonymous",
+        start_pos=0,
+        end_pos=0,
+        description=description,
+    )
+    console.print(f"[green]Y[/] Revision added: {rev.revision_id}")
+    console.print(f"  Type: {rev.revision_type.value}")
+    console.print(f"  Author: {rev.author}")
+    console.print(f"  Status: {rev.status.value}")
+
+
+@revision_cmd.command(name="list")
+def revision_list(
+    status: str | None = typer.Option(None, "--status", "-s", help="Filter by status"),
+) -> None:
+    """List tracked revisions."""
+    show_sub_banner("revision list")
+    from pimd.revisions import RevisionTracker, RevisionStatus
+
+    tracker = RevisionTracker()
+    rev_status = RevisionStatus(status.lower()) if status else None
+    revisions = tracker.get_revisions(status=rev_status)
+
+    if not revisions:
+        console.print("[yellow]No revisions found[/]")
+        return
+
+    table = Table(title=f"Revisions ({len(revisions)})")
+    table.add_column("ID", style="cyan")
+    table.add_column("Type", style="green")
+    table.add_column("Author")
+    table.add_column("Status")
+    table.add_column("Description")
+
+    for rev in revisions[:20]:
+        table.add_row(
+            rev.revision_id[:12],
+            rev.revision_type.value,
+            rev.author,
+            rev.status.value,
+            rev.description[:50],
+        )
+    console.print(table)
+
+
+# ======================================================================
+# Update export sub-commands with new formats
+# ======================================================================
+
+
+@export_app.command(name="epub")
+def export_epub(
+    input: Path = typer.Argument(..., help="Input file (.md)", exists=True),
+    output: Path = typer.Argument(..., help="Output .epub path"),
+    title: str = typer.Option("", "--title", help="Book title"),
+    author: str = typer.Option("", "--author", help="Author name"),
+    language: str = typer.Option("en", "--language", "-l", help="Language code"),
+) -> None:
+    """Export to EPUB 3.2 e-book format."""
+    from pimd.export import ExportConverter
+
+    result = ExportConverter().convert(
+        input, "epub", output,
+        metadata={"title": title or input.stem, "author": author},
+        language=language,
+    )
+    if result.success:
+        console.print(f"[green]Y[/] Exported to {result.output_path}")
+    else:
+        display_error("EPUB export failed", result.error or "")
+        raise typer.Exit(code=1)
+
+
+@export_app.command(name="latex")
+def export_latex(
+    input: Path = typer.Argument(..., help="Input file (.md)", exists=True),
+    output: Path = typer.Argument(..., help="Output .tex path"),
+    title: str = typer.Option("", "--title", help="Document title"),
+    author: str = typer.Option("", "--author", help="Author name"),
+    doc_class: str = typer.Option("article", "--class", help="Document class"),
+) -> None:
+    """Export to LaTeX format."""
+    from pimd.export import ExportConverter
+
+    result = ExportConverter().convert(
+        input, "latex", output,
+        metadata={"title": title or input.stem, "author": author},
+        latex_document_class=doc_class,
+    )
+    if result.success:
+        console.print(f"[green]Y[/] Exported to {result.output_path}")
+    else:
+        display_error("LaTeX export failed", result.error or "")
+        raise typer.Exit(code=1)
+
+
+@export_app.command(name="pdfa")
+def export_pdfa(
+    input: Path = typer.Argument(..., help="Input file (.md)", exists=True),
+    output: Path = typer.Argument(..., help="Output .pdf path"),
+    level: str = typer.Option("2b", "--level", help="PDF/A level (1b, 2b)"),
+) -> None:
+    """Export to PDF/A archival format."""
+    from pimd.export import ExportConverter
+
+    result = ExportConverter().convert(input, "pdfa", output, pdfa_level=level)
+    if result.success:
+        console.print(f"[green]Y[/] PDF/A exported to {result.output_path}")
+    else:
+        display_error("PDF/A export failed", result.error or "")
+        raise typer.Exit(code=1)
 
 
 def main() -> None:

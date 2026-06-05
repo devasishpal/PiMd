@@ -64,6 +64,25 @@ from pimd.docusaurus import DocusaurusConfig, DocusaurusProject, DocusaurusProje
 from pimd.equations import EquationConfig, EquationEngine, EquationResult
 from pimd.exceptions import ConversionError, ParserError, PiMDError, RendererError
 from pimd.export import ExportConverter, ExportFormat, ExportOptions
+from pimd.export.formats.epub import EpubRenderer, validate_epub
+from pimd.export.formats.latex import LatexRenderer
+from pimd.i18n import (
+    LanguageConfig,
+    ScriptType,
+    detect_script,
+    get_language_config,
+    is_cjk_language,
+    is_rtl_language,
+    process_text_for_language,
+)
+from pimd.revisions import (
+    Comment,
+    Revision,
+    RevisionStatus,
+    RevisionTracker,
+    RevisionType,
+    ReviewMetadata,
+)
 from pimd.footnotes import FootnoteCollection, FootnoteConfig, FootnoteDefinition
 from pimd.frontmatter import FrontmatterFormat, Metadata, parse_frontmatter
 from pimd.github import GitHubFeaturesConfig, GitHubFeaturesProcessor
@@ -305,6 +324,25 @@ __all__ = [
     # Accessibility
     "AccessibilityEngine",
     "AccessibilityReport",
+    # EPUB
+    "EpubRenderer",
+    "validate_epub",
+    "LatexRenderer",
+    # i18n
+    "ScriptType",
+    "LanguageConfig",
+    "detect_script",
+    "is_rtl_language",
+    "is_cjk_language",
+    "get_language_config",
+    "process_text_for_language",
+    # Collaborative Editing
+    "RevisionTracker",
+    "Revision",
+    "RevisionType",
+    "RevisionStatus",
+    "Comment",
+    "ReviewMetadata",
     # Remote Assets
     "RemoteAssetManager",
     "RemoteAssetConfig",
@@ -327,7 +365,7 @@ __all__ = [
     "EventBus",
 ]
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 __author__ = "PiMD Contributors"
 __description__ = "Professional document publishing platform"
 

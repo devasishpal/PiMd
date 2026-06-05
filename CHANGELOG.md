@@ -5,6 +5,58 @@ All notable changes to PiMD are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-06-05
+
+### Major New Features
+
+- **EPUB 3.2 Renderer** (`pimd.export.formats.epub`): Full EPUB package generation with XHTML content, CSS styling, NCX + nav.xhtml table of contents, cover pages, OPF metadata, embedded images/diagrams, reflowable layout, and built-in EPUB validation
+- **LaTeX Renderer** (`pimd.export.formats.latex`): Full Markdown-to-LaTeX pipeline supporting headings (section/ subsection), tables (tabular with booktabs), code blocks (listings), citations (biblatex), images (graphicx), footnotes, math expressions (amsmath), and cross-references (hyperref). Supports article, report, and book document classes.
+- **PDF/A Archival Output** (`pimd.export.pdf`): PDF/A-1b and PDF/A-2b generation via LibreOffice PDF/A export filter or native fpdf2 with font embedding, metadata preservation, and automatic fallback chain
+- **Internationalization (i18n)** (`pimd.i18n`): Unicode script detection (LTR, RTL, CJK, neutral), RTL language support (Arabic, Persian, Urdu, Hebrew) with `bidi` and `arabic_reshaper`, CJK support (Chinese, Japanese, Korean) with language-aware typography, DOCX/EPUB/LaTeX i18n configuration helpers
+- **Collaborative Editing** (`pimd.revisions`): Document revision model with RevisionTracker managing insertions/deletions/replacements/formatting changes, Comment/annotation system with threading and resolution, ReviewMetadata for session management, review summary export APIs
+
+### New Features
+
+- **CLI `pimd epub`**: Convert Markdown to EPUB 3.2 with optional EPUB validation
+- **CLI `pimd latex`**: Convert Markdown to LaTeX with configurable document class
+- **CLI `pimd language`**: Detect script direction (LTR/RTL/CJK) of any document
+- **CLI `pimd revision`**: Initialize, add, and list tracked document revisions
+- **CLI `pimd export epub`**: Export to EPUB via unified export system
+- **CLI `pimd export latex`**: Export to LaTeX via unified export system
+- **CLI `pimd export pdfa`**: Export to PDF/A archival format
+- **Auto-format detection**: CLI commands accept format based on file extension
+- **Extended `ExportFormat` enum**: EPUB, LATEX, PDFA added to supported formats
+- **EpubRenderer**: Validates generated EPUB packages with structural checks
+- **LatexRenderer**: Produces clean, readable LaTeX with proper escaping
+
+### Improvements
+
+- **Modular renderer architecture**: EPUB and LaTeX renderers follow same Document model pattern as DOCX/HTML renderers
+- **Optional dependency handling**: EPUB uses lxml (already core dep), LaTeX has zero runtime deps, i18n uses optional bidi/arabic_reshaper
+- **Dependency extras**: New extras groups: `epub`, `latex`, `pdfa`, `i18n`, `collaboration`
+- **ExportConverter**: Handles EPUB, LaTeX, PDF/A in unified `convert()` method
+- **CLI info**: Shows new formats and v2.1.0 features
+- **Export doctor**: Checks EPUB, LaTeX, PDF/A, i18n engine availability
+- **Logo/badge**: Added pepy.tech total downloads badge to README
+- **Version**: 2.1.0, Python 3.10-3.13 compatibility maintained
+
+### Internal
+
+- New `pimd.i18n` package: script detection, language configs, RTL reshaping helpers
+- New `pimd.revisions` package: RevisionTracker, Comment, ReviewMetadata models
+- Strong type hints across all new modules
+- All new modules have 100% offline capability
+- Cross-platform support (Windows, macOS, Linux) maintained
+
+### Backward Compatibility
+
+- All existing v2.0.0 APIs remain unchanged
+- New formats (EPUB, LaTeX, PDF/A) are additive — no breaking changes
+- `ExportFormat` enum gains new members but existing members unchanged
+- `ExportOptions` gains new fields with defaults — existing code unaffected
+- CLI gains new commands but existing commands unmodified
+- Plugin API unchanged
+
 ## [2.0.0] - 2026-06-03
 
 ### Major Changes

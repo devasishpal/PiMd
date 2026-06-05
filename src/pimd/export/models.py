@@ -12,6 +12,9 @@ class ExportFormat(str, Enum):
 
     DOCX = "docx"
     PDF = "pdf"
+    PDFA = "pdfa"
+    EPUB = "epub"
+    LATEX = "latex"
     HTML = "html"
     MD = "md"
     RTF = "rtf"
@@ -33,6 +36,12 @@ class ExportOptions:
     css_path: str | None = None
     pdf_engine: str = "auto"
     pdf_dpi: int = 150
+    pdfa_level: str = "2b"
+    pdfa_embed_fonts: bool = True
+    epub_css: str | None = None
+    epub_cover_image: str | None = None
+    latex_document_class: str = "article"
+    language: str = "en"
 
 
 @dataclass

@@ -17,12 +17,12 @@
 </a>
   <a href="https://github.com/devasishpal/PiMd/actions"><img src="https://img.shields.io/github/actions/workflow/status/devasishpal/PiMd/ci.yml?branch=main" alt="Build"></a>
   <a href="https://github.com/devasishpal/PiMd/actions"><img src="https://img.shields.io/github/actions/workflow/status/devasishpal/PiMd/ci.yml?branch=main&label=tests" alt="Tests"></a>
-  <a href="https://github.com/devasishpal/PiMd/blob/main/CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-v2.0.0-blue" alt="Changelog"></a>
+  <a href="https://github.com/devasishpal/PiMd/blob/main/CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-v2.1.0-blue" alt="Changelog"></a>
 </p>
 
 ---
 
-**PiMD** (Python Markdown Publisher) converts Markdown, HTML, and documentation repositories into professional DOCX documents — books, reports, technical manuals, research papers, invoices, and more. It runs entirely offline with zero cloud dependencies.
+**PiMD** (Python Markdown Publisher) converts Markdown, HTML, and documentation repositories into professional DOCX, EPUB, PDF/A, and LaTeX documents — books, reports, technical manuals, research papers, e-books, invoices, and more. It runs entirely offline with zero cloud dependencies.
 
 ---
 
@@ -32,9 +32,14 @@
 - [Quick Start](#quick-start)
 - [Architecture](#architecture)
 - [Feature Showcase](#feature-showcase)
+- [EPUB Output](#epub-output)
+- [LaTeX Output](#latex-output)
+- [PDF/A Output](#pdfa-output)
 - [DOCX Quality](#docx-quality)
 - [Diagram Support](#diagram-support)
 - [Scientific Publishing](#scientific-publishing)
+- [Internationalization (i18n)](#internationalization-i18n)
+- [Collaborative Editing](#collaborative-editing)
 - [Templates](#templates)
 - [Plugin Ecosystem](#plugin-ecosystem)
 - [Backend Integration](#backend-integration)
@@ -177,11 +182,19 @@ Incremental builds, parallel processing, streaming large files, caching with mem
 
 ### Multi-Format Export
 
-DOCX, PDF, HTML, Markdown, RTF, ODT, TXT — with a consistent public API for all formats.
+DOCX, PDF, PDF/A, EPUB, LaTeX, HTML, Markdown, RTF, ODT, TXT — with a consistent public API for all formats.
 
 ### Accessibility Validation
 
 Built-in engine checks for WCAG 1.1.1 (alt text), 1.3.1 (table headers), 2.4.10 (heading hierarchy), 4.1.1 (structure), and generates markdown reports with scores.
+
+### Internationalization (i18n)
+
+Full Unicode script detection (LTR, RTL, CJK), Arabic/Persian/Urdu/Hebrew reshaping and bidirectional support, Chinese/Japanese/Korean typography, and language-aware font/line-height configuration across all output formats.
+
+### Collaborative Editing
+
+Revision tracking system with insertions, deletions, replacements, formatting changes, threaded comments, resolution workflow, and review metadata export API.
 
 ## Quick Start
 
@@ -253,11 +266,26 @@ pimd md guide.md guide.docx
 # Convert HTML to DOCX
 pimd html page.html page.docx
 
+# Convert Markdown to EPUB 3.2
+pimd epub book.md book.epub
+
+# Convert Markdown to LaTeX
+pimd latex paper.md paper.tex
+
+# Export to PDF/A archival format
+pimd export pdfa report.md report.pdf
+
 # List available templates
 pimd template list
 
 # Generate a report
 pimd report generate executive
+
+# Detect language script direction
+pimd language input.md
+
+# Track document revisions
+pimd revision init --id doc-1 --title "Report"
 
 # Watch a directory for changes
 pimd watch ./docs --output ./build
@@ -531,6 +559,258 @@ pimd repo ./docs --output documentation.docx
 pimd frontmatter extract ./post.md
 ```
 
+## EPUB Output
+
+PiMD includes a complete **EPUB 3.2 renderer** that produces valid EPUB packages from the document model.
+
+### Features
+
+- **EPUB 3.2 compliance** — valid OPF, NCX, nav.xhtml, XHTML content, CSS
+- **Reflowable layout** — single-column, device-agnostic reading experience
+- **Table of Contents** — auto-generated from heading hierarchy (NCX + nav)
+- **Cover page** — configurable cover with title, author, and image
+- **Chapters** — automatic chapter splitting from h1/h2 headings
+- **Embedded assets** — images, diagrams, and equations embedded inline
+- **Custom CSS** — configure typography, colors, and layout
+- **Validation** — built-in `validate_epub()` checks package structure and well-formedness
+
+### CLI Usage
+
+```bash
+# Convert Markdown to EPUB
+pimd epub guide.md guide.epub
+
+# With metadata and custom CSS
+pimd epub report.md report.epub --title "Annual Report" --author "Jane Smith" --css custom.css
+
+# Validate after generation
+pimd epub book.md book.epub --validate
+```
+
+### Python API
+
+```python
+from pimd import PiMD
+from pimd.export.formats.epub import EpubRenderer
+from pimd.converters.markdown import MarkdownConverter
+
+engine = PiMD()
+engine.convert("input.md", "epub", "output.epub")
+
+# Or use the renderer directly
+converter = MarkdownConverter()
+doc = converter.parse_text(open("input.md").read())
+renderer = EpubRenderer()
+renderer.render(doc, "output.epub", title="My Book", author="Jane Smith")
+```
+
+## LaTeX Output
+
+PiMD generates **clean, readable LaTeX** suitable for compilation with pdflatex, xelatex, or lualatex.
+
+### Features
+
+- **Document classes** — article, report, book with appropriate structure
+- **Headings** — section, subsection, subsubsection, paragraph
+- **Tables** — tabular environment with booktabs styling
+- **Code blocks** — listings package with language-specific formatting
+- **Math expressions** — inline `$...$` and display `equation*`/`equation`
+- **Images** — graphicx with figure environment and captions
+- **Hyperlinks** — hyperref with link colors
+- **Citations** — biblatex with APA style preamble
+- **Cross-references** — label/ref support in generated output
+
+### CLI Usage
+
+```bash
+# Convert Markdown to LaTeX
+pimd latex paper.md paper.tex
+
+# With document class and TOC
+pimd latex thesis.md thesis.tex --class book --toc --title "My Thesis" --author "John Doe"
+```
+
+### Python API
+
+```python
+from pimd import PiMD
+from pimd.export.formats.latex import LatexRenderer
+
+engine = PiMD()
+engine.convert("input.md", "latex", "output.tex")
+
+# Or use the renderer directly
+renderer = LatexRenderer()
+renderer.render(document, "output.tex", title="Paper", document_class="article")
+```
+
+## PDF/A Output
+
+PiMD supports **archival PDF/A generation** for long-term document preservation.
+
+### Features
+
+- **PDF/A-1b** and **PDF/A-2b** conformance levels
+- **Font embedding** — automatic font embedding for faithful rendering
+- **Metadata preservation** — title, author, subject carried through
+- **Automatic fallback** — LibreOffice PDF/A filter → fpdf2 → standard PDF
+- **Standards-compliant** — ISO 19005 archival format
+
+### CLI Usage
+
+```bash
+# Export to PDF/A
+pimd export pdfa report.md output.pdf
+
+# Specify conformance level
+pimd export pdfa archive.md archive.pdf --level 1b
+```
+
+### Python API
+
+```python
+from pimd import PiMD
+from pimd.export.pdf import convert_to_pdfa
+
+engine = PiMD()
+engine.convert("input.md", "pdfa", "output.pdf")
+```
+
+### PDF/A Doctor
+
+```bash
+pimd export doctor
+```
+
+## Internationalization (i18n)
+
+PiMD provides comprehensive internationalization support across all output formats.
+
+### Script Detection
+
+Automatic detection of text direction and script type:
+
+| Script | Direction | Languages |
+|---|---|---|
+| **LTR** | Left-to-right | English, French, German, Spanish, etc. |
+| **RTL** | Right-to-left | Arabic (ar), Persian/Farsi (fa), Urdu (ur), Hebrew (he) |
+| **CJK** | Mixed | Chinese (zh), Japanese (ja), Korean (ko) |
+
+### Features
+
+- **Unicode script detection** — `detect_script()` classifies text as LTR, RTL, CJK, or neutral
+- **Language-aware typography** — `get_language_config()` provides font, size, line height for 15+ languages
+- **Arabic reshaping** — `reshape_arabic()` uses `arabic_reshaper` for proper Arabic glyph rendering
+- **Bidirectional text** — `apply_bidi()` uses `bidi` algorithm for mixed LTR/RTL text
+- **DOCX i18n** — `configure_docx_for_language()` sets document direction, fonts, and RTL properties
+- **EPUB i18n** — `configure_epub_for_language()` generates language-specific CSS with direction and font-family
+- **LaTeX i18n** — `configure_latex_for_language()` adds babel, ctex, or luatexja packages
+
+### CLI Usage
+
+```bash
+# Detect script direction of a document
+pimd language input.md
+```
+
+### Python API
+
+```python
+from pimd.i18n import (
+    detect_script, ScriptType,
+    is_rtl_language, is_cjk_language,
+    get_language_config, process_text_for_language,
+)
+
+script = detect_script("مرحبا بالعالم")  # ScriptType.RTL
+is_rtl = is_rtl_language("ar")            # True
+config = get_language_config("zh-CN")     # CJK config with appropriate font
+text = process_text_for_language("Arabic text", "ar")
+```
+
+### RTL Support by Output Format
+
+| Format | RTL Support |
+|---|---|
+| **DOCX** | Direction set via `w:bidi` on sections and paragraphs |
+| **EPUB** | `direction: rtl` + `unicode-bidi: embed` in CSS |
+| **LaTeX** | `babel` package with arabic/hebrew language support |
+| **PDF/A** | Font embedding preserves Unicode glyphs |
+
+## Collaborative Editing
+
+PiMD provides a **document revision model** for tracking changes, comments, and annotations — enabling future collaborative workflows.
+
+### Revision Model
+
+The `RevisionTracker` manages all tracked changes:
+
+- **Insertions** — new text added at a position
+- **Deletions** — text removed from a position
+- **Replacements** — text swapped for new content
+- **Formatting changes** — style modifications
+
+### Comment System
+
+Comments support threading, resolution workflow, and full metadata:
+
+- **Threaded replies** — parent/child comment relationships
+- **Resolution tracking** — mark comments resolved with attribution
+- **Position annotations** — comment on specific text ranges
+
+### Review Metadata
+
+- **Reviewers** — list of assigned reviewers
+- **Status tracking** — draft, in_review, approved, rejected
+- **Timestamps** — creation, updates, resolution dates
+
+### CLI Usage
+
+```bash
+# Initialize a revision tracker
+pimd revision init --id doc-123 --title "Annual Report"
+
+# Add a tracked revision
+pimd revision add insertion --author "alice" --desc "Added executive summary"
+
+# List tracked revisions
+pimd revision list
+
+# Filter by status
+pimd revision list --status pending
+```
+
+### Python API
+
+```python
+from pimd.revisions import RevisionTracker, RevisionType, RevisionStatus
+
+tracker = RevisionTracker(document_id="doc-123", title="Report")
+
+# Add revisions
+tracker.add_revision(
+    revision_type=RevisionType.INSERTION,
+    author="alice",
+    start_pos=42,
+    end_pos=42,
+    new_text="New content here",
+    description="Added paragraph",
+)
+
+# Add comments
+tracker.add_comment(
+    author="bob",
+    text="Please review this section",
+    start_pos=10,
+    end_pos=200,
+)
+
+# Export review summary
+summary = tracker.export_review_summary()
+print(f"Revisions: {summary['revisions']['total']}")
+print(f"Comments: {summary['comments']['total']}")
+```
+
 ## DOCX Quality
 
 PiMD produces publication-quality DOCX output:
@@ -589,7 +869,7 @@ from pimd.sdk import DiagramPlugin
 
 class MyDiagramRenderer(DiagramPlugin):
     name = "my_renderer"
-    version = "1.0.0"
+    version = "2.1.0"
 
     def render(self, source: str, language: str, **kwargs):
         # Return RenderResult with png_bytes and/or svg_bytes
@@ -717,7 +997,7 @@ Create a template directory with a `template.json`:
     "metadata": {
         "name": "custom",
         "type": "custom",
-        "version": "1.0.0",
+        "version": "2.1.0",
         "author": "Your Name",
         "description": "My custom template"
     },
@@ -894,8 +1174,13 @@ docx_bytes = engine.html_text_to_docx_bytes("<h1>Hello</h1>")
 |---|---|
 | `pimd md <input> <output>` | Convert Markdown → DOCX |
 | `pimd html <input> <output>` | Convert HTML → DOCX |
+| `pimd epub <input> <output>` | Convert Markdown → EPUB 3.2 |
+| `pimd latex <input> <output>` | Convert Markdown → LaTeX |
 | `pimd export docx <input> <output>` | Export to DOCX |
 | `pimd export pdf <input> <output>` | Export to PDF |
+| `pimd export pdfa <input> <output>` | Export to PDF/A archival format |
+| `pimd export epub <input> <output>` | Export to EPUB via unified system |
+| `pimd export latex <input> <output>` | Export to LaTeX via unified system |
 | `pimd export html <input> <output>` | Export to HTML |
 | `pimd batch <input> <output>` | Batch convert directory |
 | `pimd watch <dir>` | Watch directory for changes |
@@ -993,8 +1278,12 @@ docx_bytes = engine.html_text_to_docx_bytes("<h1>Hello</h1>")
 | `pimd frontmatter strip <input>` | Strip frontmatter |
 | `pimd analyze <input>` | Analyze document structure |
 | `pimd repo <input> <output>` | Convert documentation repo |
+| `pimd language <input>` | Detect script direction (LTR/RTL/CJK) |
 | `pimd accessibility check <input>` | Check accessibility |
 | `pimd accessibility report <input> <output>` | Generate accessibility report |
+| `pimd revision init` | Initialize revision tracker |
+| `pimd revision add <type>` | Add a tracked revision |
+| `pimd revision list` | List tracked revisions |
 
 ## Configuration
 
@@ -1165,25 +1454,27 @@ pimd/
 │       ├── streaming/           # Large file streaming
 │       ├── incremental/         # Incremental build tracker
 │       ├── parallel/            # Parallel execution
-│       ├── export/              # Export engine
+│               ├── export/              # Export engine (EPUB, LaTeX, PDF/A, DOCX, PDF, HTML)
 │       ├── batch/               # Batch processing
 │       ├── project/             # Project converter
 │       ├── compatibility/       # Ecosystem compatibility
 │       ├── frontmatter/         # Frontmatter parsing
 │       ├── callouts/            # Callout blocks
-│       ├── footnotes/           # Footnotes
-│       ├── attachments/         # Document attachments
-│       ├── profiles/            # Export profiles
-│       ├── jobs/                # Job system
-│       ├── themes/              # Theme system
-│       ├── analyzer/            # Document analyzer
+        │   ├── footnotes/           # Footnotes
+        │   ├── attachments/         # Document attachments
+        │   ├── profiles/            # Export profiles
+        │   ├── jobs/                # Job system
+        │   ├── themes/              # Theme system
+        │   ├── i18n/                # Internationalization (RTL, CJK, Unicode)
+        │   ├── revisions/           # Collaborative editing (revision tracking)
+        │   ├── analyzer/            # Document analyzer
 │       ├── repository/          # Repo conversion
 │       ├── docusaurus/          # Docusaurus adapter
 │       ├── mkdocs_/             # MkDocs adapter
 │       ├── sphinx/              # Sphinx adapter
 │       ├── obsidian/            # Obsidian adapter
 │       └── github/              # GitHub Features adapter
-├── tests/                       # 970 tests
+├── tests/                       # 1100+ tests
 ├── benchmarks/                  # Benchmark suite
 ├── examples/                    # Integration examples
 ├── .github/workflows/           # CI/CD
@@ -1197,26 +1488,27 @@ pimd/
 
 ## Roadmap
 
-### v2.1
+### v2.1 ✅ (Released)
+
+- ✅ **EPUB output** — Full EPUB 3.2 renderer implemented
+- ✅ **LaTeX output** — Full LaTeX renderer implemented
+- ✅ **PDF/A** — Archival PDF output (PDF/A-1b, PDF/A-2b)
+- ✅ **i18n** — Internationalization with RTL/CJK/Unicode support
+- ✅ **Collaborative editing** — Revision tracking, comments, annotations
+
+### v2.2
 
 - **Web API** — RESTful API server for document conversion
 - **Documentation site** — Full documentation website at pimd.ai
 - **Plugin marketplace** — Registry of community plugins
-- **EPUB output** — Full EPUB renderer implementation
-
-### v2.2
-
-- **Collaborative editing** — Track changes, comments, annotations
-- **PDF/A** — Archival PDF output
-- **i18n** — Internationalization of document output (RTL, CJK)
-- **LaTeX output** — Full LaTeX renderer implementation
+- **Presentation output (PPTX)** — PowerPoint rendering
 
 ### v3.0
 
 - **Plugin marketplace** — Package index for community plugins
 - **Distributed builds** — Remote build workers
 - **Webhooks** — Event-driven build pipelines
-- **PPX output** — Presentation rendering
+- **Collaborative editing UI** — Track changes visualization in outputs
 
 Long-term: PiMD aims to be the standard Python framework for programmatic document generation — reliable, extensible, and production-ready for any publishing workflow.
 
