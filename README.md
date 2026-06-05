@@ -12,6 +12,9 @@
   <a href="https://pypi.org/project/pimd/"><img src="https://img.shields.io/pypi/v/pimd" alt="PyPI"></a>
   <a href="https://pypi.org/project/pimd/"><img src="https://img.shields.io/pypi/pyversions/pimd" alt="Python Versions"></a>
   <a href="https://pypi.org/project/pimd/"><img src="https://img.shields.io/pypi/dm/pimd" alt="Downloads"></a>
+<a href="https://pepy.tech/projects/pimd">
+    <img src="https://static.pepy.tech/badge/pimd" alt="Total Downloads">
+</a>
   <a href="https://github.com/devasishpal/PiMd/actions"><img src="https://img.shields.io/github/actions/workflow/status/devasishpal/PiMd/ci.yml?branch=main" alt="Build"></a>
   <a href="https://github.com/devasishpal/PiMd/actions"><img src="https://img.shields.io/github/actions/workflow/status/devasishpal/PiMd/ci.yml?branch=main&label=tests" alt="Tests"></a>
   <a href="https://github.com/devasishpal/PiMd/blob/main/CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-v2.0.0-blue" alt="Changelog"></a>
