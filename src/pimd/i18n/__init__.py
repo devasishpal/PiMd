@@ -7,8 +7,7 @@ for all output formats.
 
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
@@ -281,13 +280,13 @@ def configure_docx_for_language(document: Any, language: str = "en") -> None:
     # Set document-level language
     body = document.element.body
     for p in body.iterchildren(qn("w:p")):
-        pPr = p.find(qn("w:pPr"))
-        if pPr is None:
-            pPr = OxmlElement("w:pPr")
-            p.insert(0, pPr)
+        p_pr = p.find(qn("w:pPr"))
+        if p_pr is None:
+            p_pr = OxmlElement("w:pPr")
+            p.insert(0, p_pr)
         if is_rtl:
             bidi_el = OxmlElement("w:bidi")
-            pPr.append(bidi_el)
+            p_pr.append(bidi_el)
 
 
 def configure_epub_for_language(

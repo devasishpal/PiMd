@@ -251,13 +251,12 @@ def convert_to_pdfa(
 
     # Try LibreOffice with PDF/A filter first
     try:
-        filter_name = f"writer_pdf_Export"
         proc = subprocess.run(
             [
                 "libreoffice",
                 "--headless",
                 "--convert-to",
-                f"pdf:writer_pdf_Export",
+                "pdf:writer_pdf_Export",
                 "--outdir",
                 str(out.parent),
                 str(inp),
@@ -318,7 +317,6 @@ def convert_to_pdfa(
         pass
 
     # Fallback: Standard PDF conversion then wrap
-    interim = out.parent / f"{inp.stem}_interim.pdf"
     result = convert_to_pdf(inp, out.parent, source_format="docx", engine="auto")
     if result.success and result.output_path.exists():
         if result.output_path != out:

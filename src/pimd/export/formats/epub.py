@@ -475,7 +475,6 @@ class EpubRenderer:
     ) -> str:
         manifest = ""
         spine = ""
-        guide = ""
 
         for item in spine_items:
             media_type = "application/xhtml+xml"
@@ -609,17 +608,16 @@ class EpubRenderer:
 
         if isinstance(block, EquationBlock):
             if block.omml is not None:
-                return f'<p class="equation">[Equation]</p>\n'
+                return '<p class="equation">[Equation]</p>\n'
             latex = self._escape(block.latex)
             num = f' <span class="equation-number">({block.number})</span>' if block.number is not None else ""
             return f'<p class="equation">\\({latex}\\){num}</p>\n'
 
         if hasattr(block, "type") and hasattr(block, "title"):
-            callout_type = getattr(block, "type", None)
             callout_title = getattr(block, "title", "")
             content_lines = getattr(block, "content_lines", []) or getattr(block, "content", [])
             lines_html = "".join(
-                f"<p>{self._escape(str(l))}</p>" for l in content_lines
+                f"<p>{self._escape(str(line))}</p>" for line in content_lines
             )
             return (
                 f'<div class="callout">'

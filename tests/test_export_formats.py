@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
-
-import pytest
 
 from pimd.export.formats import EpubRenderer, LatexRenderer
 from pimd.export.formats.epub import validate_epub
@@ -20,7 +17,6 @@ from pimd.models import (
     Span,
     Table,
 )
-
 
 # ======================================================================
 # Test data

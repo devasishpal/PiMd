@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pimd.i18n import (
-    LanguageConfig,
     ScriptType,
     detect_script,
     get_language_config,

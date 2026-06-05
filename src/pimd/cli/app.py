@@ -2386,7 +2386,7 @@ def language(
 ) -> None:
     """Detect script/language direction of a document."""
     show_sub_banner("language")
-    from pimd.i18n import ScriptType, detect_script, is_rtl_language, is_cjk_language
+    from pimd.i18n import ScriptType, detect_script, is_rtl_language
 
     text = input.read_text(encoding="utf-8")
     script = detect_script(text)
@@ -2399,7 +2399,7 @@ def language(
 
     if script == ScriptType.RTL:
         data["Note"] = "Right-to-left — Arabic, Hebrew, Persian, Urdu"
-        data["RTL language match"] = "Yes" if any(is_rtl_language(l) for l in ["ar", "he", "fa", "ur"]) else "No"
+        data["RTL language match"] = "Yes" if any(is_rtl_language(lang) for lang in ["ar", "he", "fa", "ur"]) else "No"
     elif script == ScriptType.CJK:
         data["Note"] = "CJK — Chinese, Japanese, Korean"
     else:
@@ -2431,7 +2431,7 @@ def revision_init(
 
     tracker = RevisionTracker(document_id=document_id, title=title)
     summary = tracker.export_review_summary()
-    console.print(f"[green]Y[/] Revision tracker initialized")
+    console.print("[green]Y[/] Revision tracker initialized")
     console.print(f"  Document ID: {summary['document_id']}")
     console.print(f"  Title: {summary['title'] or '(untitled)'}")
     console.print(f"  Created: {summary['created_at']}")
@@ -2470,7 +2470,7 @@ def revision_list(
 ) -> None:
     """List tracked revisions."""
     show_sub_banner("revision list")
-    from pimd.revisions import RevisionTracker, RevisionStatus
+    from pimd.revisions import RevisionStatus, RevisionTracker
 
     tracker = RevisionTracker()
     rev_status = RevisionStatus(status.lower()) if status else None

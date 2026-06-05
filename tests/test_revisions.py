@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pimd.revisions import (
     Comment,
+    ReviewMetadata,
     Revision,
     RevisionStatus,
     RevisionTracker,
     RevisionType,
-    ReviewMetadata,
 )
 
 

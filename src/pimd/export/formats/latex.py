@@ -25,7 +25,6 @@ from pimd.models import (
     Table,
 )
 
-
 LATEX_PREAMBLE_TEMPLATE = r"""\documentclass[12pt,a4paper]{article}
 
 %% Encoding & Fonts
@@ -200,7 +199,6 @@ class LatexRenderer:
 
     def render_to_bytes(self, document: Document, **options: Any) -> bytes:
         """Render a Document to LaTeX bytes without writing to disk."""
-        import tempfile
         with tempfile.NamedTemporaryFile(suffix=".tex", delete=False) as tmp:
             tmp_path = tmp.name
         try:

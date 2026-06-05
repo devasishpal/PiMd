@@ -66,6 +66,9 @@ from pimd.exceptions import ConversionError, ParserError, PiMDError, RendererErr
 from pimd.export import ExportConverter, ExportFormat, ExportOptions
 from pimd.export.formats.epub import EpubRenderer, validate_epub
 from pimd.export.formats.latex import LatexRenderer
+from pimd.footnotes import FootnoteCollection, FootnoteConfig, FootnoteDefinition
+from pimd.frontmatter import FrontmatterFormat, Metadata, parse_frontmatter
+from pimd.github import GitHubFeaturesConfig, GitHubFeaturesProcessor
 from pimd.i18n import (
     LanguageConfig,
     ScriptType,
@@ -75,17 +78,6 @@ from pimd.i18n import (
     is_rtl_language,
     process_text_for_language,
 )
-from pimd.revisions import (
-    Comment,
-    Revision,
-    RevisionStatus,
-    RevisionTracker,
-    RevisionType,
-    ReviewMetadata,
-)
-from pimd.footnotes import FootnoteCollection, FootnoteConfig, FootnoteDefinition
-from pimd.frontmatter import FrontmatterFormat, Metadata, parse_frontmatter
-from pimd.github import GitHubFeaturesConfig, GitHubFeaturesProcessor
 from pimd.incremental import IncrementalBuildTracker
 from pimd.jobs import JobManager, JobResult, JobStatus
 from pimd.layout import DEFAULT_LAYOUT, DocumentLayoutConfig, Margins, PageSize
@@ -124,6 +116,14 @@ from pimd.reports import ReportConfig, ReportEngine, ReportType
 
 # New modules — project-level
 from pimd.repository import RepoResult, RepositoryConfig, RepoType
+from pimd.revisions import (
+    Comment,
+    ReviewMetadata,
+    Revision,
+    RevisionStatus,
+    RevisionTracker,
+    RevisionType,
+)
 from pimd.safety import SafetyError, SafetyGuard, SafetyLimits
 from pimd.sdk import (
     AssetPlugin,
