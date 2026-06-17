@@ -26,6 +26,9 @@ from pimd.models import (
 class HtmlRenderer:
     """Render a Document model to an HTML5 string."""
 
+    def __init__(self) -> None:
+        self._figure_counter: int = 0
+
     def render(self, document: Document, title: str = "") -> str:
         """Render the document to a complete HTML5 page."""
         body = self.render_blocks(document.blocks)
@@ -45,6 +48,64 @@ class HtmlRenderer:
 {body}
 </body>
 </html>"""
+
+    def _render_diagram(self, block: Diagram) -> str:
+        """Render a diagram block with inline SVG and caption."""
+        parts: list[str] = []
+
+        # Error placeholder
+        if block.error and not block.svg_bytes:
+            fig_num = block.figure_number
+            parts.append('<div class="diagram-error">')
+            parts.append('<p><strong>[Diagram Rendering Failed]</strong></p>')
+            parts.append(f'<p>Language: {escape(block.language)}</p>')
+            parts.append(f'<p>Error: {escape(block.error)}</p>')
+            parts.append('</div>')
+            return "\n".join(parts)
+
+        # SVG-first: embed SVG directly (no rasterization needed)
+        svg_content = ""
+        if block.svg_bytes:
+            try:
+                svg_content = block.svg_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                svg_content = ""
+
+        fig_num = block.figure_number
+        if fig_num is None:
+            self._figure_counter += 1
+            fig_num = self._figure_counter
+        else:
+            self._figure_counter = max(self._figure_counter, fig_num)
+
+        fig_id = f"fig-{fig_num}"
+
+        if svg_content:
+            # Remove xml declaration if present (embedded HTML5)
+            if svg_content.startswith("<?xml"):
+                import re
+                svg_content = re.sub(r'<\?xml[^>]*\?>', '', svg_content).strip()
+            parts.append(f'<figure class="diagram" id="{fig_id}">')
+            parts.append(svg_content)
+        elif block.png_bytes:
+            import base64
+            b64 = base64.b64encode(block.png_bytes).decode("ascii")
+            parts.append(f'<figure class="diagram" id="{fig_id}">')
+            parts.append(f'<img src="data:image/png;base64,{b64}" alt="{escape(block.alt)}">')
+        else:
+            parts.append(f'<figure class="diagram" id="{fig_id}">')
+            parts.append(f'<p>[Diagram: {escape(block.language)}]</p>')
+
+        # Caption
+        if block.caption:
+            parts.append(
+                f'<figcaption class="figure-caption">'
+                f'Figure {fig_num}: {escape(block.caption)}'
+                f'</figcaption>'
+            )
+
+        parts.append('</figure>')
+        return "\n".join(parts)
 
     def render_blocks(self, blocks: list[Block]) -> str:
         """Render a sequence of blocks to HTML."""
@@ -86,8 +147,7 @@ class HtmlRenderer:
             title = f' title="{escape(block.title)}"' if block.title else ""
             return f'<figure><img src="{src}" alt="{alt}"{title}></figure>'
         elif isinstance(block, Diagram):
-            return f'<figure class="figure"><p>[Diagram: {escape(block.language)}]</p>\
-<figcaption class="figure-caption">{escape(block.caption or block.alt)}</figcaption></figure>'
+            return self._render_diagram(block)
         elif isinstance(block, EquationBlock):
             return f'<div class="equation">\\[{escape(block.svg or block.latex)}\\]</div>'
         return ""
@@ -112,6 +172,12 @@ class HtmlRenderer:
             "  .equation { text-align: center; margin: 1em 0; font-style: italic; }\n"
             "  .figure-caption { text-align: center; font-style: italic; "
             "color: #555; margin-top: 0.5em; }\n"
+            "  figure.diagram { text-align: center; margin: 1.5em 0; }\n"
+            "  figure.diagram svg { max-width: 100%; height: auto; }\n"
+            "  .diagram-error { border: 2px solid #cc0000; border-radius: 4px; "
+            "padding: 1em; margin: 1em 0; text-align: center; "
+            "background: #fff5f5; }\n"
+            "  .diagram-error p { margin: 0.25em 0; }\n"
         )
 
     def _render_spans(self, spans: list[Span]) -> str:

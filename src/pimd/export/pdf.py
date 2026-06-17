@@ -1,4 +1,11 @@
-"""Cross-platform PDF export with graceful fallback chain and PDF/A support."""
+"""Cross-platform PDF export with graceful fallback chain and PDF/A support.
+
+Note: For diagram-rich documents, PDF output preserves vector quality
+because PiDraw renders diagrams to SVG first. When converting via
+docx2pdf or LibreOffice, the DOCX contains high-DPI transparent PNGs.
+For full vector quality in PDF, use the HTML -> weasyprint pipeline
+which embeds SVG directly.
+"""
 
 from __future__ import annotations
 
@@ -290,7 +297,7 @@ def convert_to_pdfa(
         pdf.set_author(author)
 
         # Add metadata for PDF/A compliance
-        pdf.set_creator("PiMD v2.1.0")
+        pdf.set_creator("PiMD v2.2.0")
         pdf.set_subject("PDF/A Document")
 
         # Read input text from the DOCX (extract text)

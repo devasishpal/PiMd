@@ -120,14 +120,30 @@ class Image:
 
 @dataclass
 class Diagram:
-    """A rendered diagram block embedded in the document."""
+    """A rendered diagram block embedded in the document.
+
+    Properties mirror the document AST DiagramNode concept:
+    - language: diagram language (mermaid, plantuml, dot, d2, etc.)
+    - source: raw diagram source code
+    - title: optional title from info string (``title="..."``)
+    - svg: SVG string content
+    - png: PNG bytes (for DOCX embedding)
+    - width / height: rendered dimensions
+    - caption: auto-generated figure caption
+    - figure_number: auto-incremented figure number
+    - error: rendering error message (if any)
+    """
 
     alt: str
     png_bytes: bytes = b""
     source: str = ""
     language: str = ""
+    title: str | None = None
     caption: str | None = None
     svg_bytes: bytes | None = None
+    width: int | None = None
+    height: int | None = None
+    figure_number: int | None = None
     error: str | None = None
 
 

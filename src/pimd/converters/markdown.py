@@ -1,15 +1,13 @@
-"""Markdown → DOCX conversion orchestration."""
+"""Markdown → DOCX conversion orchestration.
+
+All diagram rendering is delegated to PiDraw.
+"""
 
 from pathlib import Path
 
 from pimd.diagrams import DiagramEngine, DiagramRegistry
-from pimd.diagrams.renderers import (
-    AsciiRenderer,
-    D2Renderer,
-    GraphvizRenderer,
-    MermaidRenderer,
-    PlantUMLRenderer,
-    SvgRenderer,
+from pimd.diagrams.pidraw_integration import (
+    detect_language as _pidraw_detect,
 )
 from pimd.equations import EquationEngine
 from pimd.equations.cache import MemoryEquationCache
@@ -53,8 +51,7 @@ class MarkdownConverter:
     theme : Theme, optional
         Visual theme for the generated DOCX. Defaults to ProfessionalTheme.
     diagram_engine : DiagramEngine, optional
-        Diagram rendering engine. If provided, diagram code blocks
-        (mermaid, plantuml, dot, etc.) are automatically rendered.
+        Diagram rendering engine (uses PiDraw by default).
     """
 
     def __init__(
@@ -193,39 +190,84 @@ class MarkdownConverter:
         print("Done.")
 
     # ------------------------------------------------------------------
-    # Diagram processing
+    # Diagram processing — delegated to PiDraw
     # ------------------------------------------------------------------
 
     def _process_diagrams(self, document: Document) -> None:
-        """Walk document and replace diagram code blocks with Diagram blocks."""
+        """Walk document and render diagram blocks using PiDraw."""
         if not self._diagram_engine:
             return
 
+        engine = self._diagram_engine
+        fig_counter = 0
         new_blocks: list[Block] = []
         for block in document.blocks:
-            if (
-                isinstance(block, CodeBlock)
-                and block.language
-                and block.language in self._diagram_engine.registry
-            ):
-                logger.info("Rendering %s diagram\u2026", block.language)
-                result = self._diagram_engine.render(block.code, block.language)
-                if result.png:
-                    new_blocks.append(
-                        Diagram(
-                            alt=f"{block.language} diagram",
-                            png_bytes=result.png,
-                            source=block.code,
-                            language=block.language,
-                            caption=block.language,
-                        )
-                    )
+            if isinstance(block, Diagram):
+                fig_counter += 1
+                result = engine.render(block.source, block.language)
+                if result.success:
+                    block.png_bytes = result.png or b""
+                    block.svg_bytes = result.svg.encode("utf-8") if result.svg else None
+                    block.width = result.width
+                    block.height = result.height
+                    block.figure_number = fig_counter
+                    block.error = None
                 else:
                     logger.warning(
                         "Diagram rendering failed for %s: %s",
                         block.language,
                         result.error,
                     )
+                    block.error = result.error or "Rendering failed"
+                    block.figure_number = fig_counter
+                new_blocks.append(block)
+
+            elif isinstance(block, CodeBlock):
+                lang = block.language
+                if lang is None:
+                    try:
+                        detected = _pidraw_detect(block.code, hint=None)
+                        if detected:
+                            lang = detected
+                    except Exception:
+                        pass
+
+                if lang and engine.is_diagram_language(lang):
+                    fig_counter += 1
+                    result = engine.render(block.code, lang)
+                    cap = lang.title()
+                    if result.success:
+                        new_blocks.append(
+                            Diagram(
+                                alt=f"{lang} diagram",
+                                png_bytes=result.png or b"",
+                                svg_bytes=result.svg.encode("utf-8") if result.svg else None,
+                                source=block.code,
+                                language=lang,
+                                caption=cap,
+                                width=result.width,
+                                height=result.height,
+                                figure_number=fig_counter,
+                                error=result.error,
+                            )
+                        )
+                    else:
+                        logger.warning(
+                            "Diagram rendering failed for %s: %s",
+                            lang,
+                            result.error,
+                        )
+                        new_blocks.append(
+                            Diagram(
+                                alt=f"{lang} diagram",
+                                source=block.code,
+                                language=lang or "unknown",
+                                caption=cap,
+                                figure_number=fig_counter,
+                                error=result.error or "Rendering failed",
+                            )
+                        )
+                else:
                     new_blocks.append(block)
             else:
                 new_blocks.append(block)
@@ -245,10 +287,8 @@ class MarkdownConverter:
 
         for block in document.blocks:
             if isinstance(block, Paragraph):
-                # Process inline equations and check for display equation blocks
                 result = engine._process_paragraph(block)
                 if result[1]:
-                    # Paragraph was a display equation — use result
                     eq_block = result[0]
                     if eq_block.omml is not None or eq_block.svg is not None:
                         new_blocks.append(eq_block)
@@ -257,7 +297,6 @@ class MarkdownConverter:
                 else:
                     new_blocks.append(block)
             elif isinstance(block, CodeBlock):
-                # Skip — diagrams handle code blocks
                 new_blocks.append(block)
             else:
                 new_blocks.append(block)
@@ -329,22 +368,8 @@ def _default_equation_engine() -> EquationEngine | None:
 
 
 def _default_diagram_engine() -> DiagramEngine | None:
-    """Build a diagram engine with all available renderers (no-op if none are installed)."""
+    """Build a diagram engine backed by PiDraw."""
     registry = DiagramRegistry()
-    for renderer_cls in (
-        MermaidRenderer,
-        PlantUMLRenderer,
-        GraphvizRenderer,
-        D2Renderer,
-        AsciiRenderer,
-        SvgRenderer,
-    ):
-        renderer = renderer_cls()
-        if renderer.is_available():
-            registry.register(renderer)
-
-    if len(registry) == 0:
-        return None
     return DiagramEngine(registry=registry)
 
 

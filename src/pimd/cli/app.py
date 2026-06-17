@@ -116,7 +116,8 @@ def _run_conversion(
         steps.start("Reading file")
         from pimd import PiMD
 
-        engine = PiMD(enable_cache=False)
+        render_diagrams = kwargs.pop("render_diagrams", None)
+        engine = PiMD(enable_cache=False, render_diagrams=True)
         steps.succeed("Reading file")
 
         config = load_config()
@@ -145,9 +146,9 @@ def _run_conversion(
             gen_opts["author"] = config.get("defaults", {}).get("author", "")
 
         if input_format == "markdown":
-            engine.md_to_docx(input_path, output_path, **gen_opts)
+            engine.md_to_docx(input_path, output_path, render_diagrams=render_diagrams, **gen_opts)
         else:
-            engine.html_to_docx(input_path, output_path, **gen_opts)
+            engine.html_to_docx(input_path, output_path, render_diagrams=render_diagrams, **gen_opts)
 
         steps.succeed("Rendering")
 
@@ -215,6 +216,16 @@ def md(
     ),
     header: str | None = typer.Option(None, "--header", help="Header text"),
     footer: str | None = typer.Option(None, "--footer", help="Footer text"),
+    render_diagrams: bool | None = typer.Option(
+        None,
+        "--render-diagrams",
+        help="Render diagrams using PiDraw (default: True)",
+    ),
+    diagrams: bool | None = typer.Option(
+        None,
+        "--diagrams",
+        help="Alias for --render-diagrams",
+    ),
 ) -> None:
     """Convert a Markdown file to DOCX."""
     show_sub_banner("md")
@@ -222,6 +233,8 @@ def md(
     kw: list[str] | None = None
     if keywords:
         kw = [k.strip() for k in keywords.split(",") if k.strip()]
+
+    rd = render_diagrams if render_diagrams is not None else diagrams
 
     _run_conversion(
         input,
@@ -238,6 +251,7 @@ def md(
         subject=subject,
         keywords=kw,
         doc_version=doc_version,
+        render_diagrams=rd,
     )
 
 
@@ -281,6 +295,16 @@ def html(
     ),
     header: str | None = typer.Option(None, "--header", help="Header text"),
     footer: str | None = typer.Option(None, "--footer", help="Footer text"),
+    render_diagrams: bool | None = typer.Option(
+        None,
+        "--render-diagrams",
+        help="Render diagrams using PiDraw (default: True)",
+    ),
+    diagrams: bool | None = typer.Option(
+        None,
+        "--diagrams",
+        help="Alias for --render-diagrams",
+    ),
 ) -> None:
     """Convert an HTML file to DOCX."""
     show_sub_banner("html")
@@ -288,6 +312,8 @@ def html(
     kw: list[str] | None = None
     if keywords:
         kw = [k.strip() for k in keywords.split(",") if k.strip()]
+
+    rd = render_diagrams if render_diagrams is not None else diagrams
 
     _run_conversion(
         input,
@@ -304,6 +330,7 @@ def html(
         subject=subject,
         keywords=kw,
         doc_version=doc_version,
+        render_diagrams=rd,
     )
 
 
@@ -328,11 +355,11 @@ def info() -> None:
         "Report types": "executive, technical, audit, project, research, compliance, architecture",
         "Citation styles": "APA, IEEE, MLA, Chicago, Harvard",
         "Default theme": ProfessionalTheme().name,
-        "EPUB": "Supported (v2.1.0)",
-        "LaTeX": "Supported (v2.1.0)",
-        "PDF/A": "Supported (v2.1.0)",
-        "i18n": "RTL, CJK, Unicode (v2.1.0)",
-        "Collaborative editing": "Revisions, comments, annotations (v2.1.0)",
+        "EPUB": "Supported (v2.2.0)",
+        "LaTeX": "Supported (v2.2.0)",
+        "PDF/A": "Supported (v2.2.0)",
+        "i18n": "RTL, CJK, Unicode (v2.2.0)",
+        "Collaborative editing": "Revisions, comments, annotations (v2.2.0)",
         "Config location": str(import_path("pimd.cli.config").get_config_path()),
     }
 
@@ -478,64 +505,25 @@ app.add_typer(diagrams_app, name="diagrams")
 
 @diagrams_app.command(name="list")
 def diagrams_list() -> None:
-    """List available diagram renderers and their status."""
-    from pimd.diagrams.renderers import (
-        ActDiagRenderer,
-        AsciiRenderer,
-        BlockDiagRenderer,
-        D2Renderer,
-        GraphvizRenderer,
-        MermaidRenderer,
-        NwDiagRenderer,
-        PacketDiagRenderer,
-        PlantUMLRenderer,
-        SeqDiagRenderer,
-        SvgRenderer,
-    )
+    """List available diagram renderers and their status (via PiDraw)."""
+    from pimd.diagrams.pidraw_integration import get_supported_languages
 
     show_sub_banner("diagrams list")
 
-    renderers = [
-        MermaidRenderer(),
-        PlantUMLRenderer(),
-        GraphvizRenderer(),
-        D2Renderer(),
-        AsciiRenderer(),
-        SvgRenderer(),
-        BlockDiagRenderer(),
-        SeqDiagRenderer(),
-        ActDiagRenderer(),
-        NwDiagRenderer(),
-        PacketDiagRenderer(),
-    ]
-
-    rows: list[dict[str, str]] = []
-    for r in renderers:
-        avail = r.is_available()
-        rows.append(
-            {
-                "language": r.language,
-                "renderer": r.name,
-                "available": "yes" if avail else "no",
-                "description": r.description,
-            }
-        )
-
+    languages = get_supported_languages()
     from rich.table import Table
 
     from pimd.cli.display import console as csl
 
-    table = Table(title="Diagram Renderers")
+    table = Table(title="PiDraw Diagram Languages")
     table.add_column("Language", style="cyan")
-    table.add_column("Renderer", style="green")
-    table.add_column("Available", style="bold")
-    table.add_column("Description")
-    for row in rows:
+    table.add_column("Engine", style="green")
+    table.add_column("Status", style="bold")
+    for lang, name in sorted(languages.items()):
         table.add_row(
-            row["language"],
-            row["renderer"],
-            "[green]Y[/]" if row["available"] == "yes" else "[red]X[/]",
-            row["description"],
+            lang,
+            name,
+            "[green]Y[/]",
         )
     csl.print(table)
 
@@ -544,37 +532,42 @@ def diagrams_list() -> None:
 def diagrams_test(
     language: str = typer.Argument(
         ...,
-        help="Diagram language to test (mermaid, plantuml, dot, d2, ascii, svg)",
+        help="Diagram language to test (mermaid, plantuml, dot, d2, etc.)",
     ),
 ) -> None:
-    """Render a test diagram to verify a renderer works."""
-    from pimd.diagrams import DiagramEngine, DiagramRegistry
+    """Render a test diagram to verify a renderer works (via PiDraw)."""
+    from pimd.diagrams.pidraw_integration import (
+        _normalize_language,
+        get_supported_languages,
+        render_diagram,
+    )
 
     show_sub_banner(f"diagrams test [cyan]{language}[/]")
 
-    registry = DiagramRegistry()
     try:
-        renderer = _load_renderer(language)
+        lang = _normalize_language(language)
+        supported = get_supported_languages()
+        if lang not in supported:
+            raise ValueError(
+                f"Unknown language '{language}'. "
+                f"Supported: {', '.join(sorted(supported.keys()))}"
+            )
     except ValueError as exc:
         display_error("Unknown renderer", str(exc))
         raise typer.Exit(code=1) from exc
 
-    registry.register(renderer)
-    engine = DiagramEngine(registry=registry)
-
     test_source = _test_source_for(language)
-    result = engine.render(test_source, language)
+    result = render_diagram(test_source, lang)
 
     if result.error:
         display_error("Render failed", result.error)
         raise typer.Exit(code=1)
 
-    console.print(f"[green]Y[/] {language} diagram rendered successfully")
+    console.print(f"[green]Y[/] {lang} diagram rendered successfully")
+    if result.svg:
+        console.print(f"  SVG: {len(result.svg)} chars")
     if result.png:
         console.print(f"  PNG: {len(result.png)} bytes")
-    if result.svg:
-        svg_len = len(result.svg)
-        console.print(f"  SVG: {svg_len} bytes")
 
 
 @diagrams_app.command(name="cache-clear")
@@ -587,103 +580,14 @@ def diagrams_cache_clear() -> None:
 
 @diagrams_app.command(name="doctor")
 def diagrams_doctor() -> None:
-    """Diagnose diagram rendering tools on the system."""
+    """Diagnose diagram rendering capabilities (via PiDraw)."""
     from pimd.cli.display import doctor_table
-    from pimd.diagrams.renderers import (
-        ActDiagRenderer,
-        AsciiRenderer,
-        BlockDiagRenderer,
-        D2Renderer,
-        GraphvizRenderer,
-        MermaidRenderer,
-        NwDiagRenderer,
-        PacketDiagRenderer,
-        PlantUMLRenderer,
-        SeqDiagRenderer,
-        SvgRenderer,
-    )
+    from pimd.diagrams.pidraw_integration import doctor as pidraw_doctor
 
     show_sub_banner("diagrams doctor")
 
-    results: list[dict[str, str]] = []
-    renderers = [
-        MermaidRenderer(),
-        PlantUMLRenderer(),
-        GraphvizRenderer(),
-        D2Renderer(),
-        AsciiRenderer(),
-        SvgRenderer(),
-        BlockDiagRenderer(),
-        SeqDiagRenderer(),
-        ActDiagRenderer(),
-        NwDiagRenderer(),
-        PacketDiagRenderer(),
-    ]
-
-    for r in renderers:
-        avail = r.is_available()
-        results.append(
-            {
-                "check": f"{r.name} (language: {r.language})",
-                "status": "ok" if avail else "warning",
-                "detail": "Available" if avail else "Not installed — see docs",
-            }
-        )
-
-    # Check Pillow availability for ASCII
-    try:
-        __import__("PIL")
-        results.append(
-            {
-                "check": "Pillow (ASCII diagrams)",
-                "status": "ok",
-                "detail": "installed",
-            }
-        )
-    except ImportError:
-        results.append(
-            {
-                "check": "Pillow (ASCII diagrams)",
-                "status": "warning",
-                "detail": "Not installed — pip install Pillow",
-            }
-        )
-
+    results = pidraw_doctor()
     doctor_table(results)
-
-
-def _load_renderer(language: str):  # noqa: ANN202
-    from pimd.diagrams.renderers import (
-        ActDiagRenderer,
-        AsciiRenderer,
-        BlockDiagRenderer,
-        D2Renderer,
-        GraphvizRenderer,
-        MermaidRenderer,
-        NwDiagRenderer,
-        PacketDiagRenderer,
-        PlantUMLRenderer,
-        SeqDiagRenderer,
-        SvgRenderer,
-    )
-
-    mapping = {
-        "mermaid": MermaidRenderer,
-        "plantuml": PlantUMLRenderer,
-        "dot": GraphvizRenderer,
-        "d2": D2Renderer,
-        "ascii": AsciiRenderer,
-        "svg": SvgRenderer,
-        "blockdiag": BlockDiagRenderer,
-        "seqdiag": SeqDiagRenderer,
-        "actdiag": ActDiagRenderer,
-        "nwdiag": NwDiagRenderer,
-        "packetdiag": PacketDiagRenderer,
-    }
-    cls = mapping.get(language.lower())
-    if not cls:
-        raise ValueError(f"Unknown language '{language}'. Supported: {', '.join(sorted(mapping))}")
-    return cls()
 
 
 def _test_source_for(language: str) -> str:
@@ -691,6 +595,7 @@ def _test_source_for(language: str) -> str:
         "mermaid": "graph TD\n    A[Start] --> B[End]\n",
         "plantuml": "@startuml\nAlice -> Bob: Hello\n@enduml\n",
         "dot": "digraph G { A -> B }\n",
+        "graphviz": "digraph G { A -> B }\n",
         "d2": "a -> b\n",
         "ascii": "+-------+     +-------+\n| Hello | --> | World |\n+-------+     +-------+",
         "svg": '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50">'

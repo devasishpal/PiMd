@@ -1,19 +1,33 @@
-"""Diagram engine — orchestration, caching, concurrent rendering, auto-detection."""
+"""Diagram engine — orchestration layer that delegates all rendering to PiDraw.
+
+PiDraw is the authoritative diagram backend. This engine provides
+a convenience wrapper with caching, concurrent rendering, and PiMD-specific
+integration (plugins, error handling).
+
+Never implements its own diagram rendering logic.
+"""
 
 from __future__ import annotations
 
-import re
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
-from pimd.diagrams.cache import DiagramCache, MemoryDiagramCache
-from pimd.diagrams.models import (
-    AUTO_DETECT_PATTERNS,
-    DIAGRAM_LANGUAGES,
-    DiagramConfig,
-    DiagramContext,
-    DiagramResult,
+from pimd.diagrams.models import DiagramConfig, DiagramContext, DiagramResult
+from pimd.diagrams.pidraw_integration import (
+    clear_cache as _clear_pidraw_cache,
+)
+from pimd.diagrams.pidraw_integration import (
+    detect_language as _pidraw_detect,
+)
+from pimd.diagrams.pidraw_integration import (
+    get_supported_languages,
+    is_supported_language,
+)
+from pimd.diagrams.pidraw_integration import (
+    render_diagram as _pidraw_render,
+)
+from pimd.diagrams.pidraw_integration import (
+    render_many_diagrams as _pidraw_render_many,
 )
 from pimd.diagrams.registry import DiagramRegistry
 from pimd.utils.logging import get_logger
@@ -28,29 +42,22 @@ except ImportError:
 logger = get_logger(__name__)
 
 
-_BOX_CHARS = frozenset(
-    "\u2500\u2502\u250c\u2510\u2514\u2518\u251c\u2524\u252c\u2534\u253c"
-    "\u2550\u2551\u2554\u2557\u255a\u255d\u2560\u2563\u2566\u2569\u256c"
-    "\u2501\u2503\u250f\u2513\u2517\u251b\u2523\u252b\u2533\u253b\u254b"
-)
-
-
 class DiagramEngine:
     """Central diagram rendering engine.
 
     Orchestrates detection, rendering, caching, and fallback for all
-    diagram types.
+    diagram types. All actual rendering is delegated to PiDraw.
     """
 
     def __init__(
         self,
         registry: DiagramRegistry | None = None,
-        cache: DiagramCache | None = None,
+        cache: Any = None,
         config: DiagramConfig | None = None,
         plugin_manager: DiagramPluginManager | None = None,
     ) -> None:
         self._registry = registry or DiagramRegistry()
-        self._cache = cache or MemoryDiagramCache()
+        self._cache = cache
         self._config = config or DiagramConfig()
         self._plugin_manager = plugin_manager
 
@@ -63,7 +70,7 @@ class DiagramEngine:
         return self._registry
 
     @property
-    def cache(self) -> DiagramCache:
+    def cache(self) -> Any:
         return self._cache
 
     @property
@@ -71,11 +78,13 @@ class DiagramEngine:
         return self._config
 
     # ------------------------------------------------------------------
-    # Auto-detection
+    # Auto-detection — delegates to PiDraw
     # ------------------------------------------------------------------
 
     def detect_language(self, source: str, hint: str | None = None) -> str | None:
         """Auto-detect the diagram language from source content.
+
+        Delegates to PiDraw's 87-rule detector.
 
         Args:
             source: The diagram source code.
@@ -84,51 +93,20 @@ class DiagramEngine:
         Returns:
             Detected language string, or ``None`` if detection fails.
         """
-        if hint:
-            hint_lower = hint.lower()
-            from pimd.diagrams.models import DIAGRAM_LANGUAGE_ALIASES
-            alias = DIAGRAM_LANGUAGE_ALIASES.get(hint_lower)
-            if alias:
-                return alias
-            resolved = DIAGRAM_LANGUAGES.get(hint_lower)
-            if resolved:
-                return hint_lower
-            return None
-
-        # Try pattern-based detection
-        stripped = source.strip()
-        for lang, pattern in AUTO_DETECT_PATTERNS.items():
-            if re.search(pattern, stripped, re.MULTILINE):
-                return lang
-
-        # Check for ASCII diagram heuristics
-        if self._looks_like_ascii_diagram(stripped):
-            return "ascii"
-
-        return None
+        return _pidraw_detect(source, hint)
 
     @staticmethod
-    def _looks_like_ascii_diagram(code: str) -> bool:
-        lines = code.strip().splitlines()
-        if len(lines) < 3:
-            return False
-        for ch in _BOX_CHARS:
-            if ch in code:
-                return True
-        has_plus_minus = False
-        has_pipe = False
-        for line in lines:
-            stripped = line.strip()
-            if "+" in stripped and "-" in stripped:
-                has_plus_minus = True
-            if "|" in stripped:
-                has_pipe = True
-            if has_plus_minus and has_pipe:
-                return True
-        return False
+    def is_diagram_language(language: str) -> bool:
+        """Check if *language* is a known diagram language (via PiDraw)."""
+        return is_supported_language(language)
+
+    @staticmethod
+    def supported_languages() -> list[str]:
+        """Return list of all supported diagram languages from PiDraw."""
+        return list(get_supported_languages().keys())
 
     # ------------------------------------------------------------------
-    # Single rendering
+    # Single rendering — delegates to PiDraw
     # ------------------------------------------------------------------
 
     def render(
@@ -137,11 +115,10 @@ class DiagramEngine:
         language: str | None = None,
         **options: Any,
     ) -> DiagramResult:
-        """Render a single diagram.
+        """Render a single diagram via PiDraw.
 
         If *language* is ``None``, auto-detection is attempted.
 
-        Checks cache first, then dispatches to the appropriate renderer.
         Integrates with :class:`DiagramPluginManager` if configured.
 
         On failure, returns a ``DiagramResult`` with ``error`` set (never
@@ -158,7 +135,7 @@ class DiagramEngine:
                     source=source,
                     language="unknown",
                     error="Could not auto-detect diagram language. "
-                    "Specify a language or register a renderer.",
+                    "Specify a language or install pidraw.",
                     render_time=elapsed,
                 )
 
@@ -180,143 +157,80 @@ class DiagramEngine:
             event = self._plugin_manager.dispatch(DiagramHook.BEFORE_RENDER, event)
             context = event.context
 
-        # Try cache (plugin: before_cache)
-        cache_key = DiagramCache.make_key(source, language)
-        if self._plugin_manager and DiagramHook:
-            cache_event = DiagramPluginEvent(
-                hook=DiagramHook.BEFORE_CACHE,
-                context=context,
-            )
-            self._plugin_manager.dispatch(DiagramHook.BEFORE_CACHE, cache_event)
-
-        cached = self._cache.get(cache_key)
-        if cached is not None:
-            cached.cached = True
-            cached.render_time = time.monotonic() - start
-            logger.debug("Cache hit for %s diagram", language)
-            # Plugin: after_cache
-            if self._plugin_manager and DiagramHook:
-                hit_event = DiagramPluginEvent(
-                    hook=DiagramHook.AFTER_CACHE,
-                    context=context,
-                    result=cached,
-                )
-                self._plugin_manager.dispatch(DiagramHook.AFTER_CACHE, hit_event)
-            return cached
-
-        # Plugin: after_cache (miss)
-        if self._plugin_manager and DiagramHook:
-            miss_event = DiagramPluginEvent(
-                hook=DiagramHook.AFTER_CACHE,
-                context=context,
-            )
-            self._plugin_manager.dispatch(DiagramHook.AFTER_CACHE, miss_event)
-
-        # Find renderer
+        # Check registry for custom renderers (PiMD plugins override PiDraw)
         renderer = self._registry.get(language)
-        if renderer is None:
-            elapsed = time.monotonic() - start
-            result = DiagramResult(
-                source=source,
-                language=language,
-                error=f"No renderer registered for language '{language}'",
-                render_time=elapsed,
-            )
-            # Plugin: on_error
-            if self._plugin_manager and DiagramHook:
-                err_event = DiagramPluginEvent(
-                    hook=DiagramHook.ON_ERROR,
-                    context=context,
-                    result=result,
-                    error=result.error,
+        if renderer is not None and hasattr(renderer, "_renderers"):
+            # It's a plugin renderer, use it directly
+            if not renderer.is_available():
+                elapsed = time.monotonic() - start
+                result = DiagramResult(
+                    source=source,
+                    language=language,
+                    error=f"Renderer for '{language}' is not available",
+                    render_time=elapsed,
                 )
-                self._plugin_manager.dispatch(DiagramHook.ON_ERROR, err_event)
-            return result
-
-        # Render
-        if not renderer.is_available():
-            elapsed = time.monotonic() - start
-            result = DiagramResult(
-                source=source,
-                language=language,
-                error=f"Renderer '{renderer.name}' is not available "
-                f"(tool not installed: {renderer._tool_name()})",
-                render_time=elapsed,
-            )
-            # Plugin: on_fallback
-            if self._plugin_manager and DiagramHook:
-                fallback_event = DiagramPluginEvent(
-                    hook=DiagramHook.ON_FALLBACK,
-                    context=context,
-                    result=result,
-                    renderer_name=renderer.name,
+                if self._plugin_manager and DiagramHook:
+                    err_event = DiagramPluginEvent(
+                        hook=DiagramHook.ON_ERROR,
+                        context=context,
+                        result=result,
+                        error=result.error,
+                    )
+                    self._plugin_manager.dispatch(DiagramHook.ON_ERROR, err_event)
+                return result
+            try:
+                result = renderer.render(source, **options)
+                result.source = source
+                result.language = language
+            except Exception as exc:
+                result = DiagramResult(
+                    source=source,
+                    language=language,
+                    error=f"Renderer failed: {exc}",
                 )
-                self._plugin_manager.dispatch(DiagramHook.ON_FALLBACK, fallback_event)
-            return result
-
-        try:
-            result = renderer.render(source, **options)
-            result.source = source
-            result.language = language
             result.render_time = time.monotonic() - start
-
-            # Update context with result
-            context.result = result
-            context.renderer_name = renderer.name
-
-            # Plugin: after_render
-            if self._plugin_manager and DiagramHook:
-                after_event = DiagramPluginEvent(
-                    hook=DiagramHook.AFTER_RENDER,
-                    context=context,
-                    result=result,
-                    renderer_name=renderer.name,
-                )
-                after_event = self._plugin_manager.dispatch(DiagramHook.AFTER_RENDER, after_event)
-                result = after_event.result or result
-
-            # Cache the result
-            if result.success and self._config.cache:
-                self._cache.set(cache_key, result, ttl=options.get("cache_ttl"))
-
-            logger.debug(
-                "Rendered %s diagram in %.2fs",
-                language,
-                result.render_time,
-            )
             return result
-        except Exception as exc:
-            elapsed = time.monotonic() - start
-            logger.exception("Failed to render %s diagram", language)
-            result = DiagramResult(
-                source=source,
-                language=language,
-                error=f"Rendering failed: {exc}",
-                render_time=elapsed,
+
+        # Delegate to PiDraw
+        dpi = options.get("dpi", self._config.dpi)
+        transparent = options.get("transparent", True)
+        use_cache = options.get("use_cache", self._config.cache)
+
+        result = _pidraw_render(
+            source,
+            language,
+            dpi=dpi,
+            transparent=transparent,
+            use_cache=use_cache,
+            **{k: v for k, v in options.items() if k not in ("dpi", "transparent", "use_cache", "caption", "label")},
+        )
+
+        result.render_time = time.monotonic() - start
+
+        # Plugin: after_render
+        if self._plugin_manager and DiagramHook:
+            after_event = DiagramPluginEvent(
+                hook=DiagramHook.AFTER_RENDER,
+                context=context,
+                result=result,
             )
-            # Plugin: on_error
-            if self._plugin_manager and DiagramHook:
-                err_event = DiagramPluginEvent(
-                    hook=DiagramHook.ON_ERROR,
-                    context=context,
-                    result=result,
-                    error=str(exc),
-                    renderer_name=renderer.name if renderer else None,
-                )
-                self._plugin_manager.dispatch(DiagramHook.ON_ERROR, err_event)
-            return result
+            after_event = self._plugin_manager.dispatch(DiagramHook.AFTER_RENDER, after_event)
+            result = after_event.result or result
+
+        logger.debug("Rendered %s diagram in %.2fs", language, result.render_time)
+        return result
 
     # ------------------------------------------------------------------
-    # Batch rendering (parallel)
+    # Batch rendering (parallel, via PiDraw)
     # ------------------------------------------------------------------
 
     def render_all(
         self,
-        diagrams: list[tuple[str, str | None]],  # (source, language or None)
+        diagrams: list[tuple[str, str | None]],
         max_workers: int | None = None,
         **options: Any,
     ) -> list[DiagramResult]:
-        """Render multiple diagrams concurrently.
+        """Render multiple diagrams concurrently via PiDraw.
 
         Args:
             diagrams: List of ``(source, language)`` tuples (language can be
@@ -328,41 +242,7 @@ class DiagramEngine:
             List of :class:`DiagramResult` in the same order as input.
         """
         workers = max_workers or self._config.max_concurrent
-        results: list[DiagramResult | None] = [None] * len(diagrams)
-
-        with ThreadPoolExecutor(max_workers=workers) as executor:
-            future_map = {}
-            for idx, (source, lang) in enumerate(diagrams):
-                future = executor.submit(self.render, source, lang, **options)
-                future_map[future] = idx
-
-            for future in as_completed(future_map):
-                idx = future_map[future]
-                try:
-                    results[idx] = future.result()
-                except Exception as exc:
-                    source, lang = diagrams[idx]
-                    results[idx] = DiagramResult(
-                        source=source,
-                        language=lang or "unknown",
-                        error=f"Rendering failed: {exc}",
-                    )
-
-        return [r for r in results if r is not None]
-
-    # ------------------------------------------------------------------
-    # Language helpers
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def is_diagram_language(language: str) -> bool:
-        """Check if *language* is a known diagram language."""
-        return language.lower() in DIAGRAM_LANGUAGES
-
-    @staticmethod
-    def supported_languages() -> list[str]:
-        """Return list of all supported diagram languages."""
-        return list(DIAGRAM_LANGUAGES.keys())
+        return _pidraw_render_many(diagrams, max_workers=workers, **options)
 
     # ------------------------------------------------------------------
     # Cleanup
@@ -370,7 +250,7 @@ class DiagramEngine:
 
     def clear_cache(self) -> None:
         """Clear all cached diagram renders."""
-        self._cache.clear()
+        _clear_pidraw_cache()
         logger.info("Diagram cache cleared")
 
     # ------------------------------------------------------------------
@@ -378,16 +258,7 @@ class DiagramEngine:
     # ------------------------------------------------------------------
 
     def doctor(self) -> list[dict[str, str]]:
-        """Run diagnostics on all registered renderers."""
-        results: list[dict[str, str]] = []
-        for renderer in self._registry._renderers.values():
-            available = renderer.is_available()
-            results.append(
-                {
-                    "language": renderer.language,
-                    "name": renderer.name,
-                    "available": "OK" if available else "Not installed",
-                    "tool": renderer._tool_name(),
-                }
-            )
-        return results
+        """Run diagnostics on the PiDraw integration."""
+        from pimd.diagrams.pidraw_integration import doctor as _doctor
+
+        return _doctor()

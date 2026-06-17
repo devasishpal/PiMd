@@ -17,7 +17,7 @@
 </a>
   <a href="https://github.com/devasishpal/PiMd/actions"><img src="https://img.shields.io/github/actions/workflow/status/devasishpal/PiMd/ci.yml?branch=main" alt="Build"></a>
   <a href="https://github.com/devasishpal/PiMd/actions"><img src="https://img.shields.io/github/actions/workflow/status/devasishpal/PiMd/ci.yml?branch=main&label=tests" alt="Tests"></a>
-  <a href="https://github.com/devasishpal/PiMd/blob/main/CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-v2.1.0-blue" alt="Changelog"></a>
+  <a href="https://github.com/devasishpal/PiMd/blob/main/CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-v2.2.0-blue" alt="Changelog"></a>
 </p>
 
 ---
@@ -62,7 +62,7 @@ Unlike simple Markdown-to-DOCX converters, PiMD provides:
 - A **full document model** — headings, paragraphs, code blocks, tables, lists, images, diagrams, equations, callouts, and footnotes are all first-class citizens
 - A **plugin architecture** and **Extension SDK** for custom renderers, parsers, and publishing pipelines
 - A **template engine** with inheritance, 10 preset templates, and full customization
-- **Diagram rendering** from Mermaid, PlantUML, Graphviz, D2, BlockDiag, Vega, BPMN, and ASCII art
+- **Diagram rendering** powered by [PiDraw](https://pypi.org/project/pidraw/) — Mermaid, PlantUML, Graphviz, D2, BlockDiag, Vega, BPMN, ASCII art, and any engine PiDraw supports
 - **Equation rendering** with LaTeX, MathJax, KaTeX, and native Word OMML
 - **Scientific publishing** — cross-references, bibliography, equation numbering, figure numbering
 - **Enterprise features** — incremental builds, parallel processing, streaming, caching, safety guards, accessibility validation
@@ -77,7 +77,7 @@ PiMD is designed to be used both as a **Python library** (integrate into FastAPI
 |---|---|---|
 | **Primary output** | DOCX with professional-quality rendering | General-purpose document conversion |
 | **Templates** | Built-in template engine with 10 presets | Template system via partials |
-| **Diagrams** | Mermaid, PlantUML, Graphviz, D2, BlockDiag, Vega, BPMN, ASCII | None built-in |
+| **Diagrams** | PiDraw-powered: Mermaid, PlantUML, Graphviz, D2, BlockDiag, Vega, BPMN, ASCII | None built-in |
 | **Equations** | LaTeX, MathJax, KaTeX, native Word OMML | LaTeX via MathJax |
 | **Plugin system** | Full plugin architecture with SDK | Filters and custom writers |
 | **Python API** | First-class library API | Haket filters or shell |
@@ -254,14 +254,21 @@ engine.md_to_docx(
     page_numbers=True,
     title="Annual Report",
     author="Jane Smith",
+    render_diagrams=True,       # Render Mermaid/PlantUML/etc. via PiDraw
 )
+
+# Disable diagram rendering
+engine.md_to_docx("plain.md", "plain.docx", render_diagrams=False)
 ```
 
 ### CLI
 
 ```bash
-# Convert Markdown to DOCX
-pimd md guide.md guide.docx
+# Convert Markdown to DOCX (with diagrams)
+pimd md guide.md guide.docx --diagrams
+
+# Convert Markdown to DOCX (skip diagrams)
+pimd md guide.md guide.docx --no-render-diagrams
 
 # Convert HTML to DOCX
 pimd html page.html page.docx
@@ -372,7 +379,7 @@ Document
 ├── Table (headers, rows, alignment)
 ├── OrderedList / BulletList (items with nested children)
 ├── Image (url, alt, width, height)
-├── Diagram (language, source, png_bytes, svg_bytes)
+├── Diagram (language, source, svg_bytes, png_bytes, title, figure_number)
 ├── EquationBlock (latex, omml, svg)
 ├── HorizontalRule
 ├── Callout (type, title, blocks)
@@ -399,13 +406,14 @@ The publishing layer orchestrates multi-part documents:
 
 ### Diagram Engine
 
-Diagram rendering is fully integrated into the conversion pipeline. Code blocks with recognized language hints are automatically detected and rendered:
+Diagram rendering is fully integrated into the conversion pipeline. PiMD delegates all diagram rendering to [PiDraw](https://pypi.org/project/pidraw/) — the official diagram rendering runtime. Code blocks with recognized language hints are automatically detected and rendered:
 
-- Auto-detection of diagram languages from code block content
-- 12 built-in renderers with availability detection
-- Plugin architecture for custom renderers
-- Caching with memory, filesystem, and Redis backends
-- Automatic fallback — if a renderer is unavailable, the pipeline continues
+- Language detection via PiDraw's content-based auto-detector
+- Supported languages queried from PiDraw at runtime (no hardcoded lists)
+- SHA-256 content caching with configurable in-memory cache
+- Parallel rendering with configurable worker count
+- Plugin architecture for custom renderers via the SDK
+- Graceful error handling — rendering failures produce styled warning blocks
 
 ### Equation Engine
 
@@ -491,12 +499,12 @@ pimd md sample.md output.docx
 pimd html sample.html output.docx
 ```
 
-### Diagrams
+### Diagrams (Powered by PiDraw)
 
 ```markdown
 ## Architecture Overview
 
-```mermaid
+```mermaid title="Load Balancer Architecture"
 graph TD
     A[Client] --> B[Load Balancer]
     B --> C[Server 1]
@@ -504,7 +512,7 @@ graph TD
 ```
 ```
 
-PiMD detects the `mermaid` language hint and renders the diagram as an embedded image in the DOCX output.
+PiMD delegates rendering to PiDraw, producing transparent 300 DPI PNGs for DOCX and inline SVG for HTML. The `title` attribute generates automatic figure captions (`Figure 1: Load Balancer Architecture`).
 
 ### Equations
 
@@ -841,46 +849,49 @@ PiMD produces publication-quality DOCX output:
 
 ## Diagram Support
 
-PiMD includes a universal diagram engine with built-in renderers for:
+PiMD delegates all diagram rendering to [PiDraw](https://pypi.org/project/pidraw/) — a universal diagram rendering runtime that supports every major diagram engine. PiMD never hardcodes diagram language lists; supported languages are queried from PiDraw at runtime.
 
-| Renderer | Language hint | Auto-detect | Output |
+| Engine | Language hints | DOCX | HTML |
 |---|---|---|---|
-| [Mermaid](https://mermaid.js.org/) | `mermaid` | Yes | PNG, SVG |
-| [PlantUML](https://plantuml.com/) | `plantuml` | Yes | PNG, SVG |
-| [Graphviz](https://graphviz.org/) | `dot`, `graphviz` | Yes | PNG, SVG |
-| [D2](https://d2lang.com/) | `d2` | Yes | PNG, SVG |
-| [BlockDiag](http://blockdiag.com/) | `blockdiag` | Yes | PNG |
-| [SeqDiag](http://blockdiag.com/seqdiag/) | `seqdiag` | Yes | PNG |
-| [ActDiag](http://blockdiag.com/actdiag/) | `actdiag` | Yes | PNG |
-| [NwDiag](http://blockdiag.com/nwdiag/) | `nwdiag` | Yes | PNG |
-| [PacketDiag](http://blockdiag.com/packetdiag/) | `packetdiag` | Yes | PNG |
-| [Vega](https://vega.github.io/) | `vega` | Yes | PNG |
-| [BPMN](https://en.wikipedia.org/wiki/Business_Process_Model_and_Notation) | `bpmn` | Yes | PNG |
-| ASCII Art | `ascii` | Yes | SVG |
+| [Mermaid](https://mermaid.js.org/) | `mermaid` | Transparent PNG | Inline SVG |
+| [PlantUML](https://plantuml.com/) | `plantuml`, `puml` | Transparent PNG | Inline SVG |
+| [Graphviz](https://graphviz.org/) | `dot`, `graphviz` | Transparent PNG | Inline SVG |
+| [D2](https://d2lang.com/) | `d2` | Transparent PNG | Inline SVG |
+| [BlockDiag](http://blockdiag.com/) | `blockdiag` | Transparent PNG | Inline SVG |
+| [SeqDiag](http://blockdiag.com/seqdiag/) | `seqdiag` | Transparent PNG | Inline SVG |
+| [ActDiag](http://blockdiag.com/actdiag/) | `actdiag` | Transparent PNG | Inline SVG |
+| [NwDiag](http://blockdiag.com/nwdiag/) | `nwdiag` | Transparent PNG | Inline SVG |
+| [PacketDiag](http://blockdiag.com/packetdiag/) | `packetdiag` | Transparent PNG | Inline SVG |
+| [Vega](https://vega.github.io/) | `vega` | Transparent PNG | Inline SVG |
+| [BPMN](https://en.wikipedia.org/wiki/Business_Process_Model_and_Notation) | `bpmn` | Transparent PNG | Inline SVG |
+| ASCII Art | `ascii` | Transparent PNG | Inline SVG |
 
-### Auto-Detection
+Run `pimd diagrams list` to see all languages PiDraw supports on your system.
 
-When a code block has no language hint, PiMD inspects the content for box-drawing characters, connector patterns, and structural indicators to automatically detect diagram types.
+### SVG-First Pipeline
 
-### Custom Renderers
+All diagrams are rendered to SVG first, then converted to transparent PNG at ≥300 DPI for DOCX embedding. HTML output gets inline SVG for full vector quality. This ensures vector-perfect diagrams in both formats.
 
-```python
-from pimd.sdk import DiagramPlugin
+### Figure Captions & Numbering
 
-class MyDiagramRenderer(DiagramPlugin):
-    name = "my_renderer"
-    version = "2.1.0"
+Add a `title` attribute to your diagram fence for automatic figure captions:
 
-    def render(self, source: str, language: str, **kwargs):
-        # Return RenderResult with png_bytes and/or svg_bytes
-        ...
+```markdown
+```mermaid title="System Architecture"
+graph TD
+    A[Client] --> B[Server]
 ```
+````
 
-Register your renderer:
+Captions are rendered as `Figure 1: System Architecture` centered below the diagram, with automatic numbering across the document.
 
-```python
-from pimd.diagrams import register_diagram_renderer
-register_diagram_renderer(MyDiagramRenderer())
+### CLI Flags
+
+Control diagram rendering via the `--render-diagrams` / `--diagrams` flags on `pimd md` and `pimd html` commands:
+
+```bash
+pimd md report.md report.docx --diagrams        # Enable diagram rendering (default)
+pimd md report.md report.docx --no-render-diagrams  # Skip diagram rendering
 ```
 
 ### Architecture
@@ -889,17 +900,29 @@ register_diagram_renderer(MyDiagramRenderer())
 CodeBlock (language="mermaid")
     │
     ▼
-Diagram Engine
-    │
-    ├─ Auto-detect language (if not specified)
-    ├─ Find registered renderer
-    ├─ Check cache
-    ├─ Render (subprocess or library)
-    ├─ Cache result
-    └─ Return Diagram block
+MarkdownParser → Diagram model (detected at parse time via PiDraw)
     │
     ▼
-DOCX Renderer (embeds PNG/SVG in document)
+ConversionService._process_diagrams()
+    │
+    ├─ PiDraw integration layer
+    │   ├─ SHA-256 cache lookup
+    │   ├─ SVG rendering via PiDraw
+    │   ├─ SVG → Transparent PNG (cairosvg, ≥300 DPI)
+    │   └─ Cache result
+    │
+    ▼
+DOCX Renderer: embed PNG + figure caption
+HTML Renderer: embed inline SVG + figcaption
+```
+
+### Diagnose & Test
+
+```bash
+pimd diagrams list          # List all supported languages
+pimd diagrams test mermaid  # Test a specific renderer
+pimd diagrams doctor        # Full system diagnostics
+pimd diagrams cache-clear   # Clear the in-memory cache
 ```
 
 ## Scientific Publishing
@@ -997,7 +1020,7 @@ Create a template directory with a `template.json`:
     "metadata": {
         "name": "custom",
         "type": "custom",
-        "version": "2.1.0",
+        "version": "2.2.0",
         "author": "Your Name",
         "description": "My custom template"
     },
@@ -1433,8 +1456,13 @@ pimd/
 │       ├── converters/          # Convenience converters
 │       ├── services/            # Orchestration service
 │       ├── pipeline/            # Pipeline stages
-│       ├── diagrams/            # Universal diagram engine
-│       │   └── renderers/       # 12 built-in renderers
+│       ├── diagrams/            # Universal diagram engine (PiDraw-powered)
+│       │   ├── pidraw_integration.py  # PiDraw adapter (single source of truth)
+│       │   ├── engine.py         # DiagramEngine — delegates to PiDraw
+│       │   ├── models.py         # DiagramResult, DiagramConfig — languages from PiDraw
+│       │   ├── registry.py       # PiDraw-backed registry + plugin support
+│       │   ├── cache.py          # Memory/FileSystem cache backends
+│       │   └── renderers/        # Legacy individual renderers (backward compat)
 │       ├── equations/           # Equation engine
 │       ├── templates/           # Template engine + 10 presets
 │       ├── plugins/             # Plugin system
@@ -1476,7 +1504,15 @@ pimd/
 │       └── github/              # GitHub Features adapter
 ├── tests/                       # 1100+ tests
 ├── benchmarks/                  # Benchmark suite
-├── examples/                    # Integration examples
+├── examples/                    # Integration examples + diagram demos
+│   ├── mermaid.md / mermaid.docx
+│   ├── plantuml.md / plantuml.docx
+│   ├── graphviz.md / graphviz.docx
+│   ├── d2.md / d2.docx
+│   ├── sequence.md / sequence.docx
+│   ├── fastapi_app.py
+│   ├── flask_example.py
+│   └── django_example.py
 ├── .github/workflows/           # CI/CD
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md

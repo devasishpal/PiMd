@@ -55,9 +55,16 @@ from pimd.diagrams import (
     DiagramEngine,
     DiagramRegistry,
     RenderResult,
+    clear_cache,
+    detect_language,
+    doctor,
     get_diagram_renderer,
+    get_supported_languages,
+    is_supported_language,
     list_diagram_renderers,
     register_diagram_renderer,
+    render_diagram,
+    render_many_diagrams,
 )
 from pimd.diagrams.models import DiagramConfig
 from pimd.docusaurus import DocusaurusConfig, DocusaurusProject, DocusaurusProjectConverter
@@ -162,12 +169,19 @@ __all__ = [
     "ConversionError",
     "ParserError",
     "RendererError",
-    # Diagrams
+    # Diagrams — PiDraw integration
     "DiagramEngine",
     "DiagramRegistry",
     "DiagramConfig",
     "DIAGRAM_LANGUAGES",
     "RenderResult",
+    "render_diagram",
+    "render_many_diagrams",
+    "detect_language",
+    "is_supported_language",
+    "get_supported_languages",
+    "clear_cache",
+    "doctor",
     "register_diagram_renderer",
     "get_diagram_renderer",
     "list_diagram_renderers",
@@ -365,7 +379,7 @@ __all__ = [
     "EventBus",
 ]
 
-__version__ = "2.1.0"
+__version__ = "2.2.0"
 __author__ = "PiMD Contributors"
 __description__ = "Professional document publishing platform"
 

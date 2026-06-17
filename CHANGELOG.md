@@ -5,6 +5,38 @@ All notable changes to PiMD are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-06-17
+
+### Major New Features
+
+- **PiDraw Deep Integration**: PiMD now delegates all diagram rendering to [PiDraw](https://pypi.org/project/pidraw/) — the official diagram rendering runtime. PiDraw auto-installs as a core dependency (`pidraw>=1.3.0`). Supported diagram languages are queried at runtime (no hardcoded lists): Mermaid, PlantUML, Graphviz, D2, BlockDiag, Vega, BPMN, ASCII, and more.
+- **SVG-First Pipeline**: All diagrams rendered to SVG first, then converted to transparent 300+ DPI PNG for DOCX embedding. HTML output gets inline SVG for full vector quality.
+- **Automatic Figure Captions**: Add `title="..."` to diagram fences for centered `Figure N: Title` captions with auto-numbering.
+- **Auto-Detection & Rendering**: Diagrams auto-render without any CLI flag — PiDraw detects diagram languages from code block content and fences. No `--diagrams` flag needed.
+- **Parallel Rendering**: SHA-256 cached, thread-safe parallel rendering with configurable worker count.
+
+### CLI Commands Updated
+
+- `pimd diagrams list`: Now queries PiDraw for supported languages at runtime
+- `pimd diagrams test <lang>`: Renders via PiDraw, tests SVG + PNG output
+- `pimd diagrams doctor`: Diagnostics delegated to PiDraw's doctor
+- `pimd md` / `pimd html`: Diagrams auto-render by default (no flag needed)
+
+### Internal
+
+- New `pimd/diagrams/pidraw_integration.py`: Single PiDraw adapter module
+- `pimd/diagrams/engine.py`: Delegates all rendering to PiDraw
+- `pimd/diagrams/models.py`: Queries language list from PiDraw at runtime
+- `pimd/diagrams/registry.py`: PiDraw-backed registry, plugin support preserved
+- `pimd/diagrams/cache.py`: Memory/FileSystem cache backends kept for backward compat
+- `pimd/parsers/markdown_parser.py`: Detects diagram languages via PiDraw at parse time, extracts `title="..."` for captions
+- `pimd/renderers/docx_renderer.py`: Transparent PNG at 300 DPI, smart width (5.96" on A4), figure numbering, error boxes
+- `pimd/renderers/html_renderer.py`: Inline SVG with `<figure>`/`<figcaption>`, error styling
+- `pimd/services/conversion_service.py`: `_process_diagrams` handles detected + auto-detected diagrams
+- `pimd/api/pimd.py`: `render_diagrams` parameter threaded through all sync/async methods
+- `pimd/converters/markdown.py`: PiDraw-backed diagram engine
+- **Version**: 2.2.0, Python 3.10-3.13 compatibility maintained
+
 ## [2.1.0] - 2026-06-05
 
 ### Major New Features

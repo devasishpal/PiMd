@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -14,6 +15,7 @@ from pimd.models import (
     Blockquote,
     BulletList,
     CodeBlock,
+    Diagram,
     Document,
     Heading,
     HorizontalRule,
@@ -138,9 +140,54 @@ class MarkdownParser:
 
     # -- code blocks -------------------------------------------------------
 
+    _TITLE_RE = re.compile(r'title\s*=\s*"([^"]*)"')
+
     def _parse_fence(self, tokens: Sequence[Token], i: int) -> tuple[Block | None, int]:
         info = tokens[i].info.strip() if tokens[i].info else None
-        return CodeBlock(code=tokens[i].content, language=info), 1
+        code = tokens[i].content
+
+        # Extract title="..." from info string (e.g. ```mermaid title="Flow")
+        title: str | None = None
+        language: str | None = None
+        if info:
+            title_match = self._TITLE_RE.search(info)
+            if title_match:
+                title = title_match.group(1)
+                language = self._TITLE_RE.sub("", info).strip()
+            else:
+                language = info
+
+        # Check if this is a known diagram language (via PiDraw)
+        if language and self._is_diagram_language(language):
+            caption = title or language.title()
+            return Diagram(
+                alt=f"{language} diagram",
+                source=code,
+                language=language,
+                title=title,
+                caption=caption,
+            ), 1
+
+        return CodeBlock(code=code, language=info), 1
+
+    @staticmethod
+    def _is_diagram_language(language: str) -> bool:
+        """Check if *language* is a supported diagram language.
+
+        Uses PiDraw's list of supported languages with alias resolution.
+        """
+        try:
+            from pimd.diagrams.pidraw_integration import (
+                _normalize_language,
+            )
+            normalized = _normalize_language(language)
+            from pimd.diagrams.pidraw_integration import (
+                get_supported_languages,
+            )
+            supported = get_supported_languages()
+            return normalized in supported
+        except Exception:
+            return False
 
     def _parse_code_block(self, tokens: Sequence[Token], i: int) -> tuple[Block | None, int]:
         return CodeBlock(code=tokens[i].content), 1

@@ -11,7 +11,7 @@ from docx import Document as DocxDocument
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Cm, Pt, RGBColor
+from docx.shared import Cm, Inches, Pt, RGBColor
 
 from pimd.exceptions import RendererError
 from pimd.layout import apply_layout_to_doc
@@ -53,10 +53,9 @@ logger = get_logger(__name__)
 _MONO_FONT = "Courier New"
 _MONO_SIZE = Pt(8.5)
 _IMAGE_MAX_WIDTH = Cm(14)
-_DIAGRAM_DPI = 150
-# A4 usable width with 0.5in margins = ~18cm (508pt)
-_PAGE_USABLE_WIDTH_EMU = int(18 * 360000)
-_DIAGRAM_ASPECT_RATIO = 0.6
+_DIAGRAM_DPI = 300
+_DIAGRAM_WIDTH_FACTOR = 0.75   # use 75% of printable width
+_DIAGRAM_HEIGHT_FACTOR = 0.55  # use 55% of printable height (leaves room for caption)
 
 
 class DocxRenderer:
@@ -716,80 +715,84 @@ class DocxRenderer:
     def _render_diagram(self, doc: DocxDocument, block: Diagram) -> None:
         """Embed a rendered diagram into the document with professional formatting.
 
+        SVG-first workflow:
+        1. PiDraw renders diagram to SVG
+        2. SVG converted to transparent PNG at 300 DPI for DOCX
+        3. PNG embedded in DOCX with proper sizing, centering, and caption
+
         Features:
         - Center alignment
-        - Figure numbering (auto-incrementing) with Word SEQ field
+        - Figure numbering (auto-incrementing)
         - Caption support with bookmark for cross-references
-        - Intelligent scaling: fits page width, preserves aspect ratio
-        - SVG preferred, PNG fallback
-        - Error placeholder on render failure
-        - Word compatibility via raw OPC XML
+        - Transparent background PNG
+        - Smart width calculation: fits within page width, preserves aspect ratio
+        - Anti-aliased rendering (via cairosvg at high DPI)
+        - Error placeholder on render failure (never crashes document generation)
         """
         # -- Error placeholder if no image data --
         if not block.png_bytes and not block.svg_bytes:
-            p = doc.add_paragraph(style="Normal")
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            run = p.add_run(sanitize_text(f"[Diagram: {block.alt}]"))
-            run.italic = True
-            run.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
-            run.font.size = Pt(9)
-            if block.error:
-                err_p = doc.add_paragraph(style="Normal")
-                err_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                err_r = err_p.add_run(sanitize_text(f"Error: {block.error}"))
-                err_r.italic = True
-                err_r.font.color.rgb = RGBColor(0xCC, 0x00, 0x00)
-                err_r.font.size = Pt(8)
+            self._render_diagram_error(doc, block)
             return
 
-        # -- Determine image bytes (prefer PNG for DOCX compatibility) --
-        img_data = block.png_bytes or block.svg_bytes or b""
+        # -- Use transparent PNG for DOCX (SVG is unreliable in Word) --
+        img_data = block.png_bytes or b""
+        if not img_data and block.svg_bytes:
+            logger.warning("No PNG data for diagram %s, using placeholder", block.language)
+            self._render_diagram_error(doc, block)
+            return
 
-        # -- Intelligent sizing: fit to page width, preserve aspect ratio --
-        cx = self._compute_diagram_width()
-        cy = str(int(int(cx) * _DIAGRAM_ASPECT_RATIO))
+        # -- Smart sizing: fit within page both width and height --
+        w_emu, h_emu = self._compute_diagram_dimensions(block)
 
-        # -- Center-aligned paragraph for the image --
+        # -- Center-aligned paragraph for the diagram image --
         p = doc.add_paragraph(style="Normal")
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p.paragraph_format.space_before = Pt(6)
         p.paragraph_format.space_after = Pt(3)
 
-        img_stream = io.BytesIO(img_data)
-        bookmark_id = None
-        bookmark_name = None
         try:
+            img_stream = io.BytesIO(img_data)
             img_stream.seek(0)
-            inline_shape = p.add_run().add_picture(img_stream, width=_IMAGE_MAX_WIDTH)
+            inline_shape = p.add_run().add_picture(img_stream, width=Inches(w_emu / 914400))
 
-            self._figure_counter += 1
-            bookmark_id = self._figure_counter + 1000
-            bookmark_name = f"fig_{self._figure_counter}"
+            # Get the figure number (use block's if set, else auto-increment)
+            fig_num = block.figure_number
+            if fig_num is None:
+                self._figure_counter += 1
+                fig_num = self._figure_counter
+            else:
+                self._figure_counter = max(self._figure_counter, fig_num)
 
+            bookmark_id = fig_num + 1000
+            bookmark_name = f"fig_{fig_num}"
+
+            # Override XML extent to exact EMU dimensions (ensures no distortion)
             inline = inline_shape._inline
-            wp = inline.find(qn("wp:extent")).getparent()
-
-            extent = wp.find(qn("wp:extent"))
+            extent = inline.find(qn("wp:extent"))
             if extent is not None:
-                extent.set("cx", cx)
-                extent.set("cy", cy)
+                extent.set("cx", str(w_emu))
+                extent.set("cy", str(h_emu))
 
-            doc_pr = wp.find(qn("wp:docPr"))
+            effect_extent = inline.find(qn("wp:effectExtent"))
+            if effect_extent is not None:
+                effect_extent.set("l", "0")
+                effect_extent.set("t", "0")
+                effect_extent.set("r", "0")
+                effect_extent.set("b", "0")
+
+            doc_pr = inline.find(qn("wp:docPr"))
             if doc_pr is not None:
-                doc_pr.set("id", str(self._figure_counter))
+                doc_pr.set("id", str(fig_num))
                 doc_pr.set("name", f"Diagram {block.language}")
                 if block.caption:
                     doc_pr.set("descr", sanitize_text(block.caption))
 
         except Exception as exc:
-            logger.warning("Failed to embed diagram: %s", exc)
-            p2 = doc.add_paragraph(style="Normal")
-            p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            run2 = p2.add_run(sanitize_text(f"[Diagram: {block.alt}]"))
-            run2.italic = True
-            run2.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
+            logger.warning("Failed to embed diagram image: %s", exc)
+            self._render_diagram_error(doc, block)
+            return
 
-        # -- Error message below diagram --
+        # -- Error warning below diagram (rendering continued successfully) --
         if block.error:
             err_p = doc.add_paragraph(style="Normal")
             err_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -799,41 +802,137 @@ class DocxRenderer:
             err_r.font.size = Pt(8)
             err_p.paragraph_format.space_after = Pt(6)
 
-        # -- Caption with figure numbering + bookmark for cross-references --
-        if block.caption and bookmark_id is not None:
+        # -- Caption with figure number, centered below diagram --
+        if block.caption:
             cap = doc.add_paragraph(style="Normal")
             cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
             cap.paragraph_format.space_before = Pt(2)
             cap.paragraph_format.space_after = Pt(8)
 
-            # Add bookmark start before caption text
+            # Bookmark start
             bm_start = OxmlElement("w:bookmarkStart")
             bm_start.set(qn("w:id"), str(bookmark_id))
             bm_start.set(qn("w:name"), bookmark_name)
             cap._p.append(bm_start)
 
-            caption_text = f"Figure {self._figure_counter}: {block.caption}"
+            caption_text = f"Figure {fig_num}: {block.caption}"
             r = cap.add_run(sanitize_text(caption_text))
             r.font.size = Pt(9)
             r.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
             r.italic = True
 
-            # Add bookmark end after caption text
+            # Bookmark end
             bm_end = OxmlElement("w:bookmarkEnd")
             bm_end.set(qn("w:id"), str(bookmark_id))
             cap._p.append(bm_end)
 
-    @staticmethod
-    def _compute_diagram_width() -> str:
-        """Compute diagram width in EMU, fitting within page margins.
+    def _render_diagram_error(self, doc: DocxDocument, block: Diagram) -> None:
+        """Render a visible placeholder box when a diagram cannot be rendered.
 
-        Uses a sensible fraction of the A4 usable width (17cm out of 19cm)
-        to leave breathing room.
+        Never crashes document generation — inserts a styled placeholder that
+        preserves the document flow and makes the missing diagram visible.
+        """
+        # -- Shade the background of the placeholder paragraph --
+        p = doc.add_paragraph(style="Normal")
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.paragraph_format.space_before = Pt(8)
+        p.paragraph_format.space_after = Pt(8)
+
+        p_props = p._p.get_or_add_pPr()
+        shading = OxmlElement("w:shd")
+        shading.set(qn("w:val"), "clear")
+        shading.set(qn("w:color"), "auto")
+        shading.set(qn("w:fill"), "F2F2F2")
+        p_props.append(shading)
+
+        # Dashed border
+        p_bdr = OxmlElement("w:pBdr")
+        for side in ("top", "bottom", "left", "right"):
+            b = OxmlElement(f"w:{side}")
+            b.set(qn("w:val"), "dashed")
+            b.set(qn("w:sz"), "6")
+            b.set(qn("w:space"), "6")
+            b.set(qn("w:color"), "999999")
+            p_bdr.append(b)
+        p_props.append(p_bdr)
+
+        # Placeholder text
+        lang = block.language or "?"
+        if block.error and "not supported" in block.error.lower():
+            run = p.add_run(f"[{lang} — diagram engine not available]")
+        elif block.error:
+            run = p.add_run(f"[{lang} — rendering failed]")
+        else:
+            run = p.add_run(f"[{lang} — diagram not available]")
+        run.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+        run.font.size = Pt(9)
+        run.italic = True
+
+        # Add caption below if available
+        if block.caption:
+            cap = doc.add_paragraph(style="Normal")
+            cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            cap.paragraph_format.space_before = Pt(2)
+            cap.paragraph_format.space_after = Pt(8)
+            fig_num = block.figure_number or 0
+            caption_text = f"Figure {fig_num}: {block.caption}"
+            r = cap.add_run(sanitize_text(caption_text))
+            r.font.size = Pt(9)
+            r.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+            r.italic = True
+
+    def _compute_diagram_dimensions(self, block: Diagram) -> tuple[int, int]:
+        """Compute diagram width and height in EMU, fitting within page margins.
+
+        Reads the actual section's page width and margins from the live document,
+        then uses the PNG image's own pixel dimensions to derive the exact aspect
+        ratio — guaranteeing zero distortion.  Both width and height are constrained
+        so the diagram never overflows the printable area.
 
         Returns:
-            Width in EMU as a string.
+            (width_emu, height_emu) as integers.
         """
-        return str(int(_PAGE_USABLE_WIDTH_EMU * 0.9))
+        # -- Read actual page dimensions from the live document section --
+        section = self._doc.sections[-1] if self._doc and self._doc.sections else None
+        if section:
+            page_w = section.page_width
+            page_h = section.page_height
+            margin_l = section.left_margin or Inches(1)
+            margin_r = section.right_margin or Inches(1)
+            margin_t = section.top_margin or Inches(1)
+            margin_b = section.bottom_margin or Inches(1)
+            max_w_emu = int(page_w - margin_l - margin_r)
+            max_h_emu = int(page_h - margin_t - margin_b)
+        else:
+            max_w_emu = int(6.27 * 914400)
+            max_h_emu = int(9.4 * 914400)
+
+        # -- Apply sizing factors so diagrams have breathing room --
+        max_w_emu = int(max_w_emu * _DIAGRAM_WIDTH_FACTOR)
+        max_h_emu = int(max_h_emu * _DIAGRAM_HEIGHT_FACTOR)
+
+        # -- Aspect ratio from the actual PNG pixels (guarantees no distortion) --
+        aspect = 0.5625
+        if block.png_bytes:
+            try:
+                from PIL import Image as PILImage
+                import io
+                img = PILImage.open(io.BytesIO(block.png_bytes))
+                pw, ph = img.size
+                if pw > 0 and ph > 0:
+                    raw = ph / pw
+                    if 0.2 < raw < 5.0:
+                        aspect = raw
+            except Exception:
+                pass
+
+        # -- Fit within bounds, preserving aspect --
+        w = int(min(max_w_emu, max_h_emu / aspect if aspect > 0 else max_w_emu))
+        h = int(w * aspect)
+        if h > max_h_emu:
+            h = max_h_emu
+            w = int(h / aspect) if aspect > 0 else max_w_emu
+        return int(w), int(h)
 
     # ------------------------------------------------------------------
     # Callout / Admonition

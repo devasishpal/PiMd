@@ -17,6 +17,21 @@ from pimd.themes import ProfessionalTheme
 from pimd.themes.base import Theme
 from pimd.utils.logging import get_logger
 
+try:
+    from pimd.diagrams.pidraw_integration import (
+        _HAS_PIDRAW,
+    )
+    from pimd.diagrams.pidraw_integration import (
+        detect_language as _pidraw_detect,
+    )
+    from pimd.diagrams.pidraw_integration import (
+        render_diagram as _render_with_pidraw,
+    )
+except ImportError:
+    _HAS_PIDRAW = False
+    _pidraw_detect = None  # type: ignore
+    _render_with_pidraw = None  # type: ignore
+
 logger = get_logger(__name__)
 
 _BOX_CHARS = frozenset(
@@ -72,6 +87,7 @@ class ConversionService:
         plugins: PluginManager | None = None,
         diagram_engine: Any = None,
         equation_engine: Any = None,
+        render_diagrams: bool = True,
     ) -> None:
         self._theme = theme or ProfessionalTheme()
         self._renderer = DocxRenderer(self._theme)
@@ -79,6 +95,7 @@ class ConversionService:
         self._guard = SafetyGuard(limits)
         self._plugins = plugins or PluginManager()
         self._diagram_engine = diagram_engine or _default_diagram_engine()
+        self._render_diagrams = render_diagrams
         self._equation_engine = equation_engine or _default_equation_engine()
         self._last_report: ConversionReport | None = None
 
@@ -102,12 +119,14 @@ class ConversionService:
         subject: str | None = None,
         keywords: list[str] | None = None,
         doc_version: str | None = None,
+        render_diagrams: bool | None = None,
     ) -> ConversionResult:
         """Convert Markdown source to DOCX.
 
         Args:
             source: Markdown text string or file path.
             output_path: Where to write the DOCX (``None`` = memory mode).
+            render_diagrams: Whether to render diagrams (default: True).
             **options: Rendering options (TOC, page numbers, etc.).
 
         Returns:
@@ -128,6 +147,7 @@ class ConversionService:
             subject=subject,
             keywords=keywords,
             doc_version=doc_version,
+            render_diagrams=render_diagrams,
         )
 
     def convert_html(
@@ -146,12 +166,14 @@ class ConversionService:
         subject: str | None = None,
         keywords: list[str] | None = None,
         doc_version: str | None = None,
+        render_diagrams: bool | None = None,
     ) -> ConversionResult:
         """Convert HTML source to DOCX.
 
         Args:
             source: HTML text string or file path.
             output_path: Where to write the DOCX (``None`` = memory mode).
+            render_diagrams: Whether to render diagrams (default: True).
             **options: Rendering options (TOC, page numbers, etc.).
 
         Returns:
@@ -172,6 +194,7 @@ class ConversionService:
             subject=subject,
             keywords=keywords,
             doc_version=doc_version,
+            render_diagrams=render_diagrams,
         )
 
     # ------------------------------------------------------------------
@@ -221,23 +244,59 @@ class ConversionService:
         return renderer.render_to_bytes(document, **options)
 
     def _process_diagrams(self, document: Document) -> None:
-        if not self._diagram_engine:
+        """Process and render all diagram blocks using PiDraw.
+
+        Handles two cases:
+        1. Already-detected ``Diagram`` blocks (from parser) — renders them.
+        2. ``CodeBlock`` blocks — attempts auto-detection via PiDraw.
+        """
+        if not self._diagram_engine or not self._render_diagrams:
             return
         engine = self._diagram_engine
-        registry = engine.registry
+        fig_counter = 0
         new_blocks: list[Block] = []
         for block in document.blocks:
-            if isinstance(block, CodeBlock):
+            if isinstance(block, Diagram):
+                # Already detected by parser — render it now
+                fig_counter += 1
+                result = engine.render(
+                    block.source,
+                    block.language,
+                    dpi=300,
+                    transparent=True,
+                )
+                if result.success:
+                    block.png_bytes = result.png or b""
+                    block.svg_bytes = result.svg.encode("utf-8") if result.svg else None
+                    block.width = result.width
+                    block.height = result.height
+                    block.figure_number = fig_counter
+                    block.error = None
+                else:
+                    logger.warning(
+                        "Diagram rendering failed for %s: %s",
+                        block.language,
+                        result.error,
+                    )
+                    block.error = result.error or "Rendering failed"
+                    block.figure_number = fig_counter
+                new_blocks.append(block)
+
+            elif isinstance(block, CodeBlock):
                 lang = block.language
-
                 # Try auto-detection if no language hint
-                if lang is None or lang not in registry:
-                    detected = engine.detect_language(block.code, hint=lang)
-                    if detected and detected in registry:
-                        lang = detected
+                if lang is None:
+                    try:
+                        detected = _pidraw_detect(block.code, hint=None)
+                        if detected:
+                            lang = detected
+                    except Exception:
+                        pass
 
-                if lang and lang in registry:
+                if lang and engine.is_diagram_language(lang):
+                    fig_counter += 1
                     result = engine.render(block.code, lang)
+                    cap = lang.title()
                     if result.success:
                         new_blocks.append(
                             Diagram(
@@ -246,19 +305,26 @@ class ConversionService:
                                 svg_bytes=result.svg.encode("utf-8") if result.svg else None,
                                 source=block.code,
                                 language=lang,
-                                caption=lang.title(),
+                                caption=cap,
+                                width=result.width,
+                                height=result.height,
+                                figure_number=fig_counter,
                                 error=result.error,
                             )
                         )
                     else:
                         logger.warning(
-                            "Diagram rendering failed for %s: %s", lang, result.error
+                            "Diagram rendering failed for %s: %s",
+                            lang,
+                            result.error,
                         )
                         new_blocks.append(
                             Diagram(
                                 alt=f"{lang} diagram",
                                 source=block.code,
                                 language=lang or "unknown",
+                                caption=cap,
+                                figure_number=fig_counter,
                                 error=result.error or "Rendering failed",
                             )
                         )
@@ -295,6 +361,7 @@ class ConversionService:
         source: str | Path,
         *,
         output_path: str | Path | None = None,
+        render_diagrams: bool | None = None,
         **options: Any,
     ) -> ConversionResult:
         """Core conversion pipeline."""
@@ -359,7 +426,15 @@ class ConversionService:
 
             # ---- Plugin: after_parse / before_render ----
             document = self._plugins.dispatch(ConversionHook.AFTER_PARSE, document, context=ctx)
-            self._process_diagrams(document)
+
+            # Override render_diagrams if explicitly provided
+            if render_diagrams is not None:
+                old_value = self._render_diagrams
+                self._render_diagrams = render_diagrams
+                self._process_diagrams(document)
+                self._render_diagrams = old_value
+            else:
+                self._process_diagrams(document)
             self._process_equations(document)
             document = self._plugins.dispatch(ConversionHook.BEFORE_RENDER, document, context=ctx)
 
@@ -464,41 +539,10 @@ def _collect_statistics(document: Document) -> DocumentStatistics:
 
 
 def _default_diagram_engine() -> Any:
+    """Create a default diagram engine backed by PiDraw."""
     from pimd.diagrams import DiagramEngine, DiagramRegistry
-    from pimd.diagrams.renderers import (
-        ActDiagRenderer,
-        AsciiRenderer,
-        BlockDiagRenderer,
-        D2Renderer,
-        GraphvizRenderer,
-        MermaidRenderer,
-        NwDiagRenderer,
-        PacketDiagRenderer,
-        PlantUMLRenderer,
-        SeqDiagRenderer,
-        SvgRenderer,
-    )
 
     registry = DiagramRegistry()
-    for renderer_cls in (
-        MermaidRenderer,
-        PlantUMLRenderer,
-        GraphvizRenderer,
-        D2Renderer,
-        AsciiRenderer,
-        SvgRenderer,
-        BlockDiagRenderer,
-        SeqDiagRenderer,
-        ActDiagRenderer,
-        NwDiagRenderer,
-        PacketDiagRenderer,
-    ):
-        renderer = renderer_cls()
-        if renderer.is_available():
-            registry.register(renderer)
-
-    if len(registry) == 0:
-        return None
     return DiagramEngine(registry=registry)
 
 

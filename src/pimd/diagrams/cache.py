@@ -1,4 +1,8 @@
-"""Diagram caching — memory, filesystem, and Redis-ready architecture."""
+"""Diagram caching — delegates to PiDraw's cache manager.
+
+PiDraw handles in-memory caching. This module provides compatibility
+backends for PiMD-specific use cases (file-system caching, etc.).
+"""
 
 from __future__ import annotations
 
@@ -39,7 +43,11 @@ class DiagramCache(ABC):
 
 
 class MemoryDiagramCache(DiagramCache):
-    """In-memory cache with TTL support."""
+    """In-memory cache with TTL support.
+
+    Note: PiDraw's internal cache is preferred. This is kept for
+    backward compatibility with PiMD-specific caching needs.
+    """
 
     def __init__(self, default_ttl: int = 3600) -> None:
         self._default_ttl = default_ttl
@@ -73,7 +81,7 @@ class FileSystemDiagramCache(DiagramCache):
     def __init__(self, cache_dir: str | Path) -> None:
         self._cache_dir = Path(cache_dir)
         self._cache_dir.mkdir(parents=True, exist_ok=True)
-        self._metadata: dict[str, tuple[float, str]] = {}  # key -> (expires, format)
+        self._metadata: dict[str, tuple[float, str]] = {}
 
     def _path_for(self, key: str, ext: str) -> Path:
         return self._cache_dir / f"{key}.{ext}"

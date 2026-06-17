@@ -1,4 +1,9 @@
-"""Diagram data models."""
+"""Diagram data models.
+
+Supported diagram languages are queried from PiDraw at runtime,
+never hardcoded. PiDraw is the single source of truth for all
+diagram rendering functionality.
+"""
 
 from __future__ import annotations
 
@@ -70,7 +75,7 @@ class DiagramContext:
 
 @dataclass
 class DiagramResult:
-    """Result of rendering a single diagram."""
+    """Result of rendering a single diagram via PiDraw."""
 
     source: str
     language: str
@@ -115,7 +120,7 @@ class DiagramConfig:
     default_height: int = 400
     max_width_px: int = 1200
     max_height_px: int = 1600
-    dpi: int = 150
+    dpi: int = 300
     add_captions: bool = True
     fallback_to_code_block: bool = True
     max_concurrent: int = 4
@@ -123,47 +128,40 @@ class DiagramConfig:
     detect_diagrams: bool = True
 
 
-DIAGRAM_LANGUAGES: dict[str, str] = {
-    "mermaid": "Mermaid",
-    "mmd": "Mermaid",
-    "plantuml": "PlantUML",
-    "puml": "PlantUML",
-    "dot": "Graphviz",
-    "graphviz": "Graphviz",
-    "d2": "D2",
-    "ascii": "ASCII Diagram",
-    "ditaa": "ASCII Diagram",
-    "svg": "SVG",
-    "blockdiag": "BlockDiag",
-    "seqdiag": "SeqDiag",
-    "actdiag": "ActDiag",
-    "nwdiag": "NwDiag",
-    "packetdiag": "PacketDiag",
-    "bpmn": "BPMN",
-    "vega": "Vega",
-    "vega-lite": "Vega-Lite",
-}
+# ------------------------------------------------------------------
+# Supported languages — queried from PiDraw at runtime
+# ------------------------------------------------------------------
 
 
-DIAGRAM_LANGUAGE_ALIASES: dict[str, str] = {
-    "mmd": "mermaid",
-    "puml": "plantuml",
-    "graphviz": "dot",
-    "ditaa": "ascii",
-    "blockdiag": "blockdiag",
-    "seqdiag": "seqdiag",
-    "actdiag": "actdiag",
-    "nwdiag": "nwdiag",
-    "packetdiag": "packetdiag",
-    "vega-lite": "vega-lite",
-}
+def _load_languages() -> dict[str, str]:
+    """Load supported diagram languages from PiDraw.
+
+    Returns:
+        ``{language_key: display_name}`` dictionary.
+    """
+    try:
+        from pimd.diagrams.pidraw_integration import get_supported_languages as _gsl
+        return _gsl()
+    except Exception:
+        return {}
 
 
-AUTO_DETECT_PATTERNS: dict[str, str] = {
-    "mermaid": r"^\s*(graph\s+(TB|TD|BT|RL|LR)|sequenceDiagram|classDiagram|stateDiagram-v2|erDiagram|gantt|pie\s+show|pie\s+title|flowchart\s+(TB|TD|BT|RL|LR)|journey|gitgraph|mindmap|timeline|quadrantChart|requirementDiagram|xychart-beta)",
-    "plantuml": r"^\s*@start\w+",
-    "dot": r"^\s*(di(g|)raph\s+\w+\s*\{|graph\s+\w+\s*\{)",
-    "d2": r"^\s*\w+\s*->\s*\w+",
-    "vega-lite": r'^\s*\{[\s\S]*"\$schema"[\s\S]*"mark"[\s\S]*\}',
-    "vega": r'^\s*\{[\s\S]*"\$schema"[\s\S]*"marks"[\s\S]*\}',
-}
+def _load_aliases() -> dict[str, str]:
+    """Return common language aliases."""
+    return {
+        "mmd": "mermaid",
+        "puml": "plantuml",
+        "graphviz": "dot",
+        "ditaa": "ascii",
+        "blockdiag": "blockdiag",
+        "seqdiag": "seqdiag",
+        "actdiag": "actdiag",
+        "nwdiag": "nwdiag",
+        "packetdiag": "packetdiag",
+        "vega-lite": "vega-lite",
+    }
+
+
+DIAGRAM_LANGUAGES: dict[str, str] = _load_languages()
+DIAGRAM_LANGUAGE_ALIASES: dict[str, str] = _load_aliases()
+AUTO_DETECT_PATTERNS: dict[str, str] = {}

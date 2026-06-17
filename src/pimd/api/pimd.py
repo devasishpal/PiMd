@@ -46,6 +46,7 @@ class PiMD:
         limits: SafetyLimits | None = None,
         plugins: PluginManager | None = None,
         enable_cache: bool = True,
+        render_diagrams: bool = True,
     ) -> None:
         self._cache: CacheBackend | None
         if cache is not None:
@@ -60,6 +61,7 @@ class PiMD:
             cache=self._cache,
             limits=limits,
             plugins=plugins,
+            render_diagrams=render_diagrams,
         )
 
     # ======================================================================
@@ -70,6 +72,7 @@ class PiMD:
         self,
         input_file: str | Path,
         output_file: str | Path,
+        render_diagrams: bool | None = None,
         **options: Any,
     ) -> ConversionResult:
         """Convert a Markdown file to a DOCX file.
@@ -77,19 +80,21 @@ class PiMD:
         Args:
             input_file: Path to the input ``.md`` file.
             output_file: Path where the output ``.docx`` will be written.
+            render_diagrams: Whether to render diagrams (default: True).
             **options: Rendering options passed to the renderer.
 
         Returns:
             A :class:`ConversionResult` with path and report.
         """
         return self._service.convert_markdown(
-            Path(input_file), output_path=Path(output_file), **options
+            Path(input_file), output_path=Path(output_file), render_diagrams=render_diagrams, **options
         )
 
     def html_to_docx(
         self,
         input_file: str | Path,
         output_file: str | Path,
+        render_diagrams: bool | None = None,
         **options: Any,
     ) -> ConversionResult:
         """Convert an HTML file to a DOCX file.
@@ -97,13 +102,14 @@ class PiMD:
         Args:
             input_file: Path to the input ``.html`` file.
             output_file: Path where the output ``.docx`` will be written.
+            render_diagrams: Whether to render diagrams (default: True).
             **options: Rendering options passed to the renderer.
 
         Returns:
             A :class:`ConversionResult` with path and report.
         """
         return self._service.convert_html(
-            Path(input_file), output_path=Path(output_file), **options
+            Path(input_file), output_path=Path(output_file), render_diagrams=render_diagrams, **options
         )
 
     # ======================================================================
@@ -114,6 +120,7 @@ class PiMD:
         self,
         markdown_text: str,
         output_file: str | Path,
+        render_diagrams: bool | None = None,
         **options: Any,
     ) -> ConversionResult:
         """Convert a Markdown string to a DOCX file.
@@ -121,19 +128,21 @@ class PiMD:
         Args:
             markdown_text: Raw Markdown text.
             output_file: Path where the output ``.docx`` will be written.
+            render_diagrams: Whether to render diagrams (default: True).
             **options: Rendering options passed to the renderer.
 
         Returns:
             A :class:`ConversionResult` with path and report.
         """
         return self._service.convert_markdown(
-            markdown_text, output_path=Path(output_file), **options
+            markdown_text, output_path=Path(output_file), render_diagrams=render_diagrams, **options
         )
 
     def html_text_to_docx(
         self,
         html_text: str,
         output_file: str | Path,
+        render_diagrams: bool | None = None,
         **options: Any,
     ) -> ConversionResult:
         """Convert an HTML string to a DOCX file.
@@ -141,12 +150,13 @@ class PiMD:
         Args:
             html_text: Raw HTML text.
             output_file: Path where the output ``.docx`` will be written.
+            render_diagrams: Whether to render diagrams (default: True).
             **options: Rendering options passed to the renderer.
 
         Returns:
             A :class:`ConversionResult` with path and report.
         """
-        return self._service.convert_html(html_text, output_path=Path(output_file), **options)
+        return self._service.convert_html(html_text, output_path=Path(output_file), render_diagrams=render_diagrams, **options)
 
     # ======================================================================
     # Sync — text input → bytes (memory mode)
@@ -155,6 +165,7 @@ class PiMD:
     def md_text_to_docx_bytes(
         self,
         markdown_text: str,
+        render_diagrams: bool | None = None,
         **options: Any,
     ) -> bytes:
         """Convert a Markdown string to DOCX bytes.
@@ -163,12 +174,13 @@ class PiMD:
 
         Args:
             markdown_text: Raw Markdown text.
+            render_diagrams: Whether to render diagrams (default: True).
             **options: Rendering options passed to the renderer.
 
         Returns:
             The DOCX file contents as ``bytes``.
         """
-        result = self._service.convert_markdown(markdown_text, **options)
+        result = self._service.convert_markdown(markdown_text, render_diagrams=render_diagrams, **options)
         if result.output_bytes is None:
             raise ConversionError("Memory mode conversion returned no bytes")
         return result.output_bytes
@@ -176,6 +188,7 @@ class PiMD:
     def html_text_to_docx_bytes(
         self,
         html_text: str,
+        render_diagrams: bool | None = None,
         **options: Any,
     ) -> bytes:
         """Convert an HTML string to DOCX bytes.
@@ -184,12 +197,13 @@ class PiMD:
 
         Args:
             html_text: Raw HTML text.
+            render_diagrams: Whether to render diagrams (default: True).
             **options: Rendering options passed to the renderer.
 
         Returns:
             The DOCX file contents as ``bytes``.
         """
-        result = self._service.convert_html(html_text, **options)
+        result = self._service.convert_html(html_text, render_diagrams=render_diagrams, **options)
         if result.output_bytes is None:
             raise ConversionError("Memory mode conversion returned no bytes")
         return result.output_bytes
@@ -202,67 +216,77 @@ class PiMD:
         self,
         input_file: str | Path,
         output_file: str | Path,
+        render_diagrams: bool | None = None,
         **options: Any,
     ) -> ConversionResult:
         """Async version of :meth:`md_to_docx`."""
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self.md_to_docx, input_file, output_file, **options)
+        return await loop.run_in_executor(
+            None, lambda: self.md_to_docx(input_file, output_file, render_diagrams=render_diagrams, **options)
+        )
 
     async def async_html_to_docx(
         self,
         input_file: str | Path,
         output_file: str | Path,
+        render_diagrams: bool | None = None,
         **options: Any,
     ) -> ConversionResult:
         """Async version of :meth:`html_to_docx`."""
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
-            None, self.html_to_docx, input_file, output_file, **options
+            None, lambda: self.html_to_docx(input_file, output_file, render_diagrams=render_diagrams, **options)
         )
 
     async def async_md_text_to_docx(
         self,
         markdown_text: str,
         output_file: str | Path,
+        render_diagrams: bool | None = None,
         **options: Any,
     ) -> ConversionResult:
         """Async version of :meth:`md_text_to_docx`."""
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
-            None, self.md_text_to_docx, markdown_text, output_file, **options
+            None, lambda: self.md_text_to_docx(markdown_text, output_file, render_diagrams=render_diagrams, **options)
         )
 
     async def async_html_text_to_docx(
         self,
         html_text: str,
         output_file: str | Path,
+        render_diagrams: bool | None = None,
         **options: Any,
     ) -> ConversionResult:
         """Async version of :meth:`html_text_to_docx`."""
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
-            None, self.html_text_to_docx, html_text, output_file, **options
+            None, lambda: self.html_text_to_docx(html_text, output_file, render_diagrams=render_diagrams, **options)
         )
 
     async def async_md_text_to_docx_bytes(
         self,
         markdown_text: str,
+        render_diagrams: bool | None = None,
         **options: Any,
     ) -> bytes:
         """Async version of :meth:`md_text_to_docx_bytes`."""
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
-            None, self.md_text_to_docx_bytes, markdown_text, **options
+            None, lambda: self.md_text_to_docx_bytes(markdown_text, render_diagrams=render_diagrams, **options)
         )
 
     async def async_html_text_to_docx_bytes(
         self,
         html_text: str,
+        render_diagrams: bool | None = None,
         **options: Any,
     ) -> bytes:
         """Async version of :meth:`html_text_to_docx_bytes`."""
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self.html_text_to_docx_bytes, html_text, **options)
+        return await loop.run_in_executor(
+            None, lambda: self.html_text_to_docx_bytes(html_text, render_diagrams=render_diagrams, **options)
+        )
 
     # ======================================================================
     # Unified convert API — single entry point for all formats
@@ -273,6 +297,7 @@ class PiMD:
         input_file: str | Path,
         output_format: str = "docx",
         output_file: str | Path | None = None,
+        render_diagrams: bool | None = None,
         **options: Any,
     ) -> ConversionResult:
         """Convert an input file to any supported format.
@@ -284,6 +309,7 @@ class PiMD:
             input_file: Path to the input file (.md, .html, .htm).
             output_format: Target format (docx, pdf, html, md, txt, rtf, odt).
             output_file: Optional explicit output path. Auto-derived if omitted.
+            render_diagrams: Whether to render diagrams (default: True).
             **options: Rendering options passed to the renderer.
 
         Returns:
