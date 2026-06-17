@@ -916,7 +916,6 @@ class DocxRenderer:
         if block.png_bytes:
             try:
                 from PIL import Image as PILImage
-                import io
                 img = PILImage.open(io.BytesIO(block.png_bytes))
                 pw, ph = img.size
                 if pw > 0 and ph > 0:
