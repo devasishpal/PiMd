@@ -30,3 +30,33 @@
 ## Git
 - Do not commit or push unless explicitly asked. Stage only intended files; never commit secrets.
 - On Windows, `*.md` globs in PowerShell get expanded by the shell — quote them or use the default pattern.
+
+## Release Process (v2.2.3+)
+
+1. **Pre-release checks (must all pass before bumping):**
+   - Run `ruff check src/ tests/ benchmarks/` — no errors
+   - Run `py -m pytest tests/ -v --tb=short -x` — all pass
+   - Create real test `.md` and `.html` files with all diagrams + equations in `C:\Users\Alok\Desktop\pimd-test/`
+   - Convert both to DOCX: `py -m pimd md file.md file.docx` and `py -m pimd html file.html file.docx`
+   - Verify no `TypeError` or rendering errors
+
+2. **Bump version:**
+   - Update `version` in `pyproject.toml`
+   - Add changelog entry at top of `CHANGELOG.md` with `## [X.Y.Z] - YYYY-MM-DD` and `### Fixed` / `### Added` sections
+   - Commit: `git add pyproject.toml CHANGELOG.md; git commit -m "Bump version to X.Y.Z"`
+
+3. **Tag and push:**
+   - `git tag vX.Y.Z`
+   - `git push origin main --tags`
+
+4. **GitHub Actions handles:**
+   - `release.yml` workflow triggers on tag push `v*`
+   - Builds wheel + sdist via `python -m build`
+   - Publishes to PyPI via `pypa/gh-action-pypi-publish`
+   - Extracts changelog section for this version from `CHANGELOG.md`
+   - Creates GitHub Release with changelog and attached artifacts
+
+5. **Post-release:**
+   - Verify the GitHub Release was created
+   - Verify `pip install pimd` installs the new version
+   - Run conversion on a real test file using the installed version (not local source)
