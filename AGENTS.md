@@ -42,8 +42,9 @@
 
 2. **Bump version:**
    - Update `version` in `pyproject.toml`
+   - Update `__version__` in `src/pimd/__init__.py` to match
    - Add changelog entry at top of `CHANGELOG.md` with `## [X.Y.Z] - YYYY-MM-DD` and `### Fixed` / `### Added` sections
-   - Commit: `git add pyproject.toml CHANGELOG.md; git commit -m "Bump version to X.Y.Z"`
+   - Commit: `git add pyproject.toml src/pimd/__init__.py CHANGELOG.md; git commit -m "Bump version to X.Y.Z"`
 
 3. **Tag and push:**
    - `git tag vX.Y.Z`
