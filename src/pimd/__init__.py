@@ -447,7 +447,7 @@ __all__ = [
     "EventBus",
 ]
 
-__version__ = "2.2.1"
+__version__ = "2.2.2"
 __author__ = "PiMD Contributors"
 __description__ = "Professional document publishing platform"
 

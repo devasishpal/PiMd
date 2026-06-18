@@ -571,7 +571,7 @@ class DocxRenderer:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _render_blockquote(doc: DocxDocument, block: Blockquote) -> None:
+    def _render_blockquote(self, doc: DocxDocument, block: Blockquote) -> None:
         for child in block.children:
             if isinstance(child, Paragraph):
                 try:
@@ -580,8 +580,10 @@ class DocxRenderer:
                     p = doc.add_paragraph()
                     p.paragraph_format.left_indent = Cm(1.0)
                 DocxRenderer._add_spans_to_paragraph(p, child.spans)
+            elif isinstance(child, Blockquote):
+                self._render_blockquote(doc, child)
             else:
-                DocxRenderer._render_blockquote(doc, child)
+                self._render_block(child)
 
     # ------------------------------------------------------------------
     # Lists

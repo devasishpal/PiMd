@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pimd"
-version = "2.2.1"
+version = "2.2.2"
 description = "Professional document publishing platform — Markdown, HTML, diagrams, equations, templates, EPUB, LaTeX, PDF/A, i18n, multi-format export"
 readme = "README.md"
 license = { text = "MIT" }
