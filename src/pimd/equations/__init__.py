@@ -1,4 +1,4 @@
-"""Equation rendering system — native OMML Word equations with SVG fallback."""
+"""Equation rendering system — renders via PiDraw's Playwright→PNG pipeline."""
 
 from pimd.equations.engine import EquationEngine
 from pimd.equations.models import EquationConfig, EquationResult

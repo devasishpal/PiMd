@@ -1,12 +1,21 @@
 """Diagram system — powered by PiDraw.
 
 PiDraw is the authoritative diagram backend. All rendering is
-delegated to PiDraw. PiMD never implements its own diagram
-rendering logic.
+delegated to PiDraw via the stable :mod:`pimd.diagrams.adapter` layer.
+PiMD never implements its own diagram rendering logic.
 
 Supported diagram languages are queried from PiDraw at runtime.
 """
 
+from pimd.diagrams.adapter import (
+    clear_cache,
+    detect_language,
+    doctor,
+    get_supported_languages,
+    is_supported_language,
+    render_diagram,
+    render_many_diagrams,
+)
 from pimd.diagrams.cache import DiagramCache, FileSystemDiagramCache, MemoryDiagramCache
 from pimd.diagrams.engine import DiagramEngine
 from pimd.diagrams.models import (
@@ -18,15 +27,6 @@ from pimd.diagrams.models import (
     DiagramScaleMode,
     RenderResult,
 )
-from pimd.diagrams.pidraw_integration import (
-    clear_cache,
-    detect_language,
-    doctor,
-    get_supported_languages,
-    is_supported_language,
-    render_diagram,
-    render_many_diagrams,
-)
 from pimd.diagrams.plugin import DiagramHook, DiagramPlugin, DiagramPluginEvent, DiagramPluginManager
 from pimd.diagrams.registry import (
     DiagramRegistry,
@@ -36,7 +36,6 @@ from pimd.diagrams.registry import (
 )
 
 __all__ = [
-    # PiDraw integration
     "render_diagram",
     "render_many_diagrams",
     "detect_language",
@@ -44,7 +43,6 @@ __all__ = [
     "get_supported_languages",
     "clear_cache",
     "doctor",
-    # Engine
     "DiagramEngine",
     "DiagramRegistry",
     "DiagramResult",
@@ -53,18 +51,14 @@ __all__ = [
     "DiagramContext",
     "DiagramScaleMode",
     "DiagramPlacement",
-    # Plugins
     "DiagramPlugin",
     "DiagramPluginEvent",
     "DiagramPluginManager",
     "DiagramHook",
-    # Language registry
     "DIAGRAM_LANGUAGES",
-    # Cache
     "DiagramCache",
     "MemoryDiagramCache",
     "FileSystemDiagramCache",
-    # Registry API
     "register_diagram_renderer",
     "get_diagram_renderer",
     "list_diagram_renderers",

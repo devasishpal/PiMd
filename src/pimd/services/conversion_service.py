@@ -88,9 +88,10 @@ class ConversionService:
         diagram_engine: Any = None,
         equation_engine: Any = None,
         render_diagrams: bool = True,
+        layout: Any = None,
     ) -> None:
         self._theme = theme or ProfessionalTheme()
-        self._renderer = DocxRenderer(self._theme)
+        self._renderer = DocxRenderer(self._theme, layout=layout)
         self._cache = cache
         self._guard = SafetyGuard(limits)
         self._plugins = plugins or PluginManager()
@@ -211,15 +212,23 @@ class ConversionService:
     # ------------------------------------------------------------------
 
     def _get_input_text(self, source: str | Path) -> str:
-        """Read text from a string or file path."""
+        """Read text from a string or file path with encoding detection."""
+        path: Path | None = None
         if isinstance(source, Path):
             path = source
+        else:
+            p = Path(source)
+            if p.is_file() and p.suffix in (".md", ".html", ".markdown", ".htm", ".rst", ".txt"):
+                path = p
+        if path is not None:
             self._guard.check_file_size(path)
-            return path.read_text(encoding="utf-8")
-        p = Path(source)
-        if p.is_file() and p.suffix in (".md", ".html", ".markdown", ".htm", ".rst", ".txt"):
-            self._guard.check_file_size(p)
-            return p.read_text(encoding="utf-8")
+            raw = path.read_bytes()
+            for enc in ("utf-8", "utf-16", "windows-1252", "latin-1"):
+                try:
+                    return raw.decode(enc)
+                except (UnicodeDecodeError, LookupError):
+                    continue
+            return raw.decode("utf-8", errors="replace")
         self._guard.check_text_size(source)
         return source
 
@@ -240,7 +249,7 @@ class ConversionService:
     def _render_to_bytes(self, document: Document, **options: Any) -> bytes:
         from pimd.renderers.docx_renderer import DocxRenderer as _DocxRenderer
 
-        renderer = _DocxRenderer(self._theme)
+        renderer = _DocxRenderer(self._theme, layout=self._renderer._layout)
         return renderer.render_to_bytes(document, **options)
 
     def _process_diagrams(self, document: Document) -> None:
@@ -284,6 +293,12 @@ class ConversionService:
 
             elif isinstance(block, CodeBlock):
                 lang = block.language
+                # Normalize language: strip CSS class prefixes
+                if lang:
+                    for prefix in ("language-", "lang-", "code-"):
+                        if lang.startswith(prefix):
+                            lang = lang[len(prefix):]
+                            break
                 # Try auto-detection if no language hint
                 if lang is None:
                     try:
@@ -345,7 +360,7 @@ class ConversionService:
             elif isinstance(block, Paragraph):
                 eq_text, is_eq = engine._process_paragraph(block)
                 if is_eq:
-                    if eq_text.omml is not None or eq_text.svg is not None:
+                    if eq_text.png is not None:
                         new_blocks.append(eq_text)
                     else:
                         new_blocks.append(block)
@@ -540,10 +555,9 @@ def _collect_statistics(document: Document) -> DocumentStatistics:
 
 def _default_diagram_engine() -> Any:
     """Create a default diagram engine backed by PiDraw."""
-    from pimd.diagrams import DiagramEngine, DiagramRegistry
+    from pimd.diagrams import DiagramEngine
 
-    registry = DiagramRegistry()
-    return DiagramEngine(registry=registry)
+    return DiagramEngine()
 
 
 def _default_equation_engine() -> Any:

@@ -143,6 +143,10 @@ class StreamingMarkdownReader:
     def __len__(self) -> int:
         return self._handler.count_lines(self.path)
 
+    def read(self) -> str:
+        """Read entire file content."""
+        return self.path.read_text(encoding="utf-8")
+
     @property
     def size_mb(self) -> float:
         return self._handler.estimate_size_mb(self.path)

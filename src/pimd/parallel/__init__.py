@@ -43,6 +43,12 @@ class ParallelExecutor(ABC):
     def __init__(self, max_workers: int | None = None) -> None:
         self.max_workers = max_workers or min(32, (os.cpu_count() or 1) + 4)
 
+    def __enter__(self) -> ParallelExecutor:
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        pass
+
     @abstractmethod
     def map(self, fn: Callable, items: list[Any], **kwargs: Any) -> list[ParallelResult]:
         """Apply fn to each item in parallel."""

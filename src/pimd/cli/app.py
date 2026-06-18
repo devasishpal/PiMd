@@ -117,7 +117,49 @@ def _run_conversion(
         from pimd import PiMD
 
         render_diagrams = kwargs.pop("render_diagrams", None)
-        engine = PiMD(enable_cache=False, render_diagrams=True)
+        template_name = kwargs.pop("template", None)
+
+        # Apply template if specified
+        layout = None
+        if template_name:
+            from pimd.layout import DocumentLayoutConfig, Margins, PageSize
+            from pimd.services.template_service import TemplateService
+
+            ts = TemplateService()
+            try:
+                tpl_cfg = ts.apply_template(template_name)
+                page_size = PageSize(tpl_cfg.get("page_size", "A4").upper())
+                margins = Margins(
+                    top=tpl_cfg.get("margin_top", 2.54) / 2.54,
+                    bottom=tpl_cfg.get("margin_bottom", 2.54) / 2.54,
+                    left=tpl_cfg.get("margin_left", 2.54) / 2.54,
+                    right=tpl_cfg.get("margin_right", 2.54) / 2.54,
+                )
+                layout = DocumentLayoutConfig(
+                    page_size=page_size,
+                    margins=margins,
+                    default_font=tpl_cfg.get("default_font", "Calibri"),
+                    default_font_size=tpl_cfg.get("default_font_size", 11),
+                    heading_font=tpl_cfg.get("heading_font", "Calibri"),
+                    line_spacing=tpl_cfg.get("line_spacing", 1.15),
+                    paragraph_spacing_after=int(tpl_cfg.get("paragraph_spacing", 6)),
+                )
+                # Merge template defaults into gen_opts
+                if not kwargs.get("generate_toc"):
+                    kwargs["generate_toc"] = tpl_cfg.get("generate_toc", False)
+                if not kwargs.get("page_numbers"):
+                    kwargs["page_numbers"] = tpl_cfg.get("page_numbers", True)
+                if not kwargs.get("cover_page"):
+                    kwargs["cover_page"] = tpl_cfg.get("cover_page", False)
+                if not kwargs.get("header_text"):
+                    kwargs["header_text"] = tpl_cfg.get("header_text", "")
+                if not kwargs.get("footer_text"):
+                    kwargs["footer_text"] = tpl_cfg.get("footer_text", "")
+            except Exception as exc:
+                display_error("Template error", str(exc))
+                raise typer.Exit(code=1) from exc
+
+        engine = PiMD(enable_cache=False, render_diagrams=True, layout=layout)
         steps.succeed("Reading file")
 
         config = load_config()
@@ -226,6 +268,11 @@ def md(
         "--diagrams",
         help="Alias for --render-diagrams",
     ),
+    template: str | None = typer.Option(
+        None,
+        "--template",
+        help="Template name (academic, professional, business, technical, book, resume, invoice, manual, proposal, api)",
+    ),
 ) -> None:
     """Convert a Markdown file to DOCX."""
     show_sub_banner("md")
@@ -252,6 +299,7 @@ def md(
         keywords=kw,
         doc_version=doc_version,
         render_diagrams=rd,
+        template=template,
     )
 
 
@@ -305,6 +353,11 @@ def html(
         "--diagrams",
         help="Alias for --render-diagrams",
     ),
+    template: str | None = typer.Option(
+        None,
+        "--template",
+        help="Template name (academic, professional, business, technical, book, resume, invoice, manual, proposal, api)",
+    ),
 ) -> None:
     """Convert an HTML file to DOCX."""
     show_sub_banner("html")
@@ -331,6 +384,7 @@ def html(
         keywords=kw,
         doc_version=doc_version,
         render_diagrams=rd,
+        template=template,
     )
 
 
@@ -367,13 +421,146 @@ def info() -> None:
 
 
 # ======================================================================
+# pimd system-report
+# ======================================================================
+
+
+@app.command(name="system-report")
+def system_report() -> None:
+    """Generate a comprehensive system diagnostic report."""
+    show_sub_banner("system-report")
+    from typing import Any
+
+    from pimd.caching.unified import get_cache
+    from pimd.registry import get_registry
+
+    report: dict[str, Any] = {
+        "pimd_version": __version__,
+        "python": sys.version,
+        "platform": sys.platform,
+    }
+
+    # Dependencies
+    deps: dict[str, str] = {}
+    for display_name, import_name in [
+        ("python-docx", "docx"),
+        ("markdown-it-py", "markdown_it"),
+        ("beautifulsoup4", "bs4"),
+        ("lxml", "lxml"),
+        ("typer", "typer"),
+        ("rich", "rich"),
+    ]:
+        try:
+            mod = __import__(import_name)
+            deps[display_name] = getattr(mod, "__version__", "installed")
+        except ImportError:
+            deps[display_name] = "missing"
+    report["dependencies"] = deps
+
+    # PiDraw
+    try:
+        from pidraw import __version__ as pv
+        report["pidraw"] = f"v{pv}"
+    except ImportError:
+        report["pidraw"] = "not installed"
+
+    # Registry health
+    registry = get_registry()
+    report["registry"] = registry.health()
+
+    # Cache stats
+    cache = get_cache()
+    stats = cache.stats()
+    report["cache"] = {
+        "l1_entries": stats.l1_entries,
+        "l2_entries": stats.l2_entries,
+        "l3_available": stats.l3_available,
+        "hits": stats.hits,
+        "misses": stats.misses,
+    }
+
+    table = Table(title="System Report", show_header=False, box=None)
+    table.add_column("Key", style="bold cyan", width=30)
+    table.add_column("Value")
+
+    def _add(key: str, value: object) -> None:
+        if isinstance(value, dict):
+            for k, v in value.items():
+                _add(f"{key}.{k}", v)
+        elif isinstance(value, list):
+            table.add_row(key, ", ".join(str(x) for x in value))
+        else:
+            table.add_row(key, str(value))
+
+    for k, v in report.items():
+        _add(k, v)
+
+    console.print(table)
+
+
+# ======================================================================
+# pimd benchmark
+# ======================================================================
+
+
+@app.command()
+def benchmark(
+    input: Path = typer.Argument(
+        ...,
+        help="Input .md file to benchmark with",
+        exists=True,
+    ),
+    iterations: int = typer.Option(5, "--iterations", "-n", help="Number of iterations"),
+    warmup: int = typer.Option(1, "--warmup", "-w", help="Warmup iterations (not counted)"),
+) -> None:
+    """Benchmark conversion performance."""
+    show_sub_banner("benchmark")
+
+    from pimd import PiMD
+
+    text = input.read_text(encoding="utf-8")
+
+    # Warmup
+    engine = PiMD(enable_cache=True, render_diagrams=True)
+    for _ in range(warmup):
+        engine.md_text_to_docx_bytes(text)
+
+    # Benchmark
+    import time
+
+    times: list[float] = []
+    for i in range(iterations):
+        start = time.monotonic()
+        engine.md_text_to_docx_bytes(text)
+        elapsed = time.monotonic() - start
+        times.append(elapsed)
+        console.print(f"  Iteration {i+1}: {elapsed:.3f}s")
+
+    avg = sum(times) / len(times)
+    import statistics
+
+    std = statistics.stdev(times) if len(times) > 1 else 0.0
+
+    data = {
+        "Input file": str(input),
+        "Size": f"{len(text)} chars",
+        "Iterations": str(iterations),
+        "Average": f"{avg:.3f}s",
+        "Std Dev": f"{std:.3f}s",
+        "Min": f"{min(times):.3f}s",
+        "Max": f"{max(times):.3f}s",
+    }
+    info_table(data)
+
+
+# ======================================================================
 # pimd doctor
 # ======================================================================
 
 
 @app.command()
 def doctor() -> None:
-    """Run system diagnostics."""
+    """Run comprehensive system diagnostics."""
     show_sub_banner("doctor")
 
     results: list[dict[str, str]] = []
@@ -426,6 +613,13 @@ def doctor() -> None:
                 }
             )
 
+    # -- PiDraw --
+    try:
+        from pidraw import __version__ as pv
+        results.append({"check": "PiDraw", "status": "ok", "detail": f"v{pv}"})
+    except ImportError:
+        results.append({"check": "PiDraw", "status": "error", "detail": "Not installed — pip install pidraw"})
+
     # -- Config directory --
     from pimd.cli.config import get_config_path
 
@@ -469,6 +663,36 @@ def doctor() -> None:
                 "detail": f"Cannot write to {cwd}",
             }
         )
+
+    # -- Cache health --
+    try:
+        from pimd.caching.unified import get_cache
+
+        cache = get_cache()
+        stats = cache.stats()
+        cache_status = "ok" if stats.l1_entries >= 0 else "warning"
+        cache_detail = f"L1={stats.l1_entries} L2={stats.l2_entries}"
+        if stats.l3_available:
+            cache_detail += " L3=redis"
+        results.append({"check": "Cache", "status": cache_status, "detail": cache_detail})
+    except Exception as exc:
+        results.append({"check": "Cache", "status": "warning", "detail": str(exc)})
+
+    # -- Registry health --
+    try:
+        from pimd.registry import get_registry
+
+        registry = get_registry()
+        h = registry.health()
+        results.append(
+            {
+                "check": "Capability Registry",
+                "status": "ok",
+                "detail": f"{h['total_capabilities']} capabilities across {len([t for t in h['by_type'].values() if t > 0])} types",
+            }
+        )
+    except Exception as exc:
+        results.append({"check": "Capability Registry", "status": "warning", "detail": str(exc)})
 
     doctor_table(results)
 
@@ -669,8 +893,7 @@ def equations_test(
         raise typer.Exit(code=1)
 
     console.print("[green]Y[/] Equation rendered successfully")
-    console.print(f"  OMML: {'yes' if result.has_omml else 'no'}")
-    console.print(f"  SVG:  {'yes (' + str(len(result.svg)) + ' bytes)' if result.svg else 'no'}")
+    console.print(f"  PNG:  {'yes (' + str(len(result.png)) + ' bytes)' if result.png else 'no'}")
     console.print(f"  Time: {result.render_time:.4f}s")
     if result.number is not None:
         console.print(f"  Number: ({result.number})")
@@ -1173,7 +1396,7 @@ def merge(
 # ======================================================================
 
 
-@app.command()
+@app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": False})
 def batch(
     input_dir: Path = typer.Argument(
         ...,
@@ -1184,9 +1407,18 @@ def batch(
     pattern: str = typer.Option("*.md", "--pattern", help="File glob pattern"),
     format: str = typer.Option("docx", "--format", help="Output format"),
     workers: int = typer.Option(4, "--workers", help="Parallel workers"),
+    ctx: typer.Context = None,
 ) -> None:
     """Batch-convert files in a directory (parallel)."""
     show_sub_banner("batch")
+
+    # Windows: click expands --pattern *.md to --pattern file1.md file2.md ...
+    # If that happened, ctx.args has the extra expanded files.
+    # Reconstruct the original glob pattern from the first file's suffix.
+    if ctx is not None and ctx.args and not any(c in pattern for c in "*?[!"):
+        suffix = Path(pattern).suffix or ".md"
+        pattern = f"*{suffix}"
+
     from pimd.batch import BatchProcessor
 
     processor = BatchProcessor(max_workers=workers)
@@ -1381,11 +1613,20 @@ app.add_typer(cache_app, name="cache")
 
 @cache_app.command(name="clear")
 def cache_clear() -> None:
-    """Clear all caches."""
+    """Clear all caches (memory, disk, Redis, unified cache)."""
     show_sub_banner("cache clear")
-    from pimd.caching.memory import MemoryCache
+    from pimd.caching.unified import get_cache, reset_cache
 
-    MemoryCache().clear()
+    cache = get_cache()
+    cache.clear()
+    reset_cache()
+    console.print("[green]Y[/] Unified cache cleared (L1 memory + L2 disk)")
+    try:
+        from pimd.caching.memory import MemoryCache
+
+        MemoryCache().clear()
+    except Exception:
+        pass
     try:
         from pimd.caching.redis_cache import RedisCacheBackend
 
@@ -1395,33 +1636,44 @@ def cache_clear() -> None:
             console.print("[green]Y[/] Redis cache cleared")
     except Exception:
         pass
-    console.print("[green]Y[/] Memory cache cleared")
 
 
 @cache_app.command(name="status")
 def cache_status() -> None:
     """Show cache backend status."""
     show_sub_banner("cache status")
-    from pimd.caching.redis_cache import RedisCacheBackend
+    from pimd.caching.unified import get_cache
 
-    cache = RedisCacheBackend()
-    status = cache.health_check()
-    if status.get("available"):
-        console.print("[green]Y[/] Redis: Connected")
+    cache = get_cache()
+    stats = cache.stats()
+    console.print(f"[cyan]L1 (Memory):[/] {stats.l1_entries} entries")
+    console.print(f"[cyan]L2 (Disk):[/]   {stats.l2_entries} entries ({stats.size_bytes / 1024:.1f} KB)")
+    if stats.l3_available:
+        console.print(f"[cyan]L3 (Redis):[/] {stats.l3_entries} entries [green]connected[/]")
     else:
-        console.print("[yellow]X[/] Redis: Not available (using memory)")
+        console.print("[cyan]L3 (Redis):[/] [yellow]not available[/]")
+    console.print(f"\n[cyan]Hits:[/]  {stats.hits}")
+    console.print(f"[cyan]Misses:[/] {stats.misses}")
 
 
 @cache_app.command(name="info")
 def cache_info() -> None:
     """Show cache statistics and diagnostics."""
     show_sub_banner("cache info")
-    from pimd.caching.diagnostics import diagnose_cache, format_cache_info
-    from pimd.caching.memory import MemoryCache
+    from pimd.caching.unified import get_cache
 
-    cache = MemoryCache()
-    info = diagnose_cache(cache)
-    console.print(format_cache_info(info))
+    cache = get_cache()
+    stats = cache.stats()
+    data = {
+        "L1 entries (memory)": str(stats.l1_entries),
+        "L2 entries (disk)": str(stats.l2_entries),
+        "L3 available (Redis)": "[green]Yes[/]" if stats.l3_available else "[red]No[/]",
+        "L3 entries": str(stats.l3_entries),
+        "Cache hits": str(stats.hits),
+        "Cache misses": str(stats.misses),
+        "Disk size": f"{stats.size_bytes / 1024:.1f} KB",
+    }
+    info_table(data)
 
 
 # ======================================================================
@@ -1624,14 +1876,14 @@ def analyze(
         sev = severity_map.get(issue.severity.value if hasattr(issue.severity, 'value') else issue.severity, "INFO")
         table.add_row(sev, issue.category, issue.file or "", issue.message[:80])
     console.print(table)
-    console.print(f"\nTotal: {report.summary().get('total', len(report.issues))} issues")
+    console.print(f"\nTotal: {report.summary.get('total_issues', len(report.issues))} issues")
 
     if output:
         import json
 
         Path(output).write_text(json.dumps({
             "issues": [i.__dict__ if hasattr(i, '__dict__') else {} for i in report.issues],
-            "summary": report.summary(),
+            "summary": report.summary,
         }, indent=2, default=str), encoding="utf-8")
         console.print(f"[green]Y[/] Report written to {output}")
 
@@ -2087,6 +2339,72 @@ def plugin_doctor() -> None:
             console.print(f"  [yellow]![/] {r.get('check', '?')}: {r.get('message', '')}")
         else:
             console.print(f"  [red]X[/] {r.get('check', '?')}: {r.get('message', '')}")
+
+
+@plugin_app.command(name="info")
+def plugin_info(
+    name: str = typer.Argument(..., help="Plugin name to inspect"),
+) -> None:
+    """Show detailed information about a specific plugin."""
+    show_sub_banner(f"plugin info [cyan]{name}[/]")
+    from pimd.plugins import PluginManager
+
+    mgr = PluginManager()
+    plugins = mgr.list_plugins()
+    plugin = next((p for p in plugins if p.get("name", "").lower() == name.lower()), None)
+    if plugin is None:
+        display_error("Not found", f"Plugin '{name}' not found")
+        raise typer.Exit(code=1)
+
+    data = {
+        "Name": plugin.get("name", ""),
+        "Version": plugin.get("version", ""),
+        "Type": plugin.get("plugin_type", ""),
+        "Enabled": "[green]Yes[/]" if plugin.get("enabled") == "True" else "[red]No[/]",
+        "Description": plugin.get("description", ""),
+        "Author": plugin.get("author", ""),
+        "Entry Point": plugin.get("entry_point", ""),
+    }
+    info_table(data)
+
+
+@plugin_app.command(name="validate")
+def plugin_validate(
+    path: Path = typer.Argument(
+        ...,
+        help="Path to plugin file or TOML manifest",
+        exists=True,
+    ),
+) -> None:
+    """Validate a plugin manifest or plugin file."""
+    show_sub_banner(f"plugin validate [cyan]{path}[/]")
+    from pimd.security import verify_plugin_hash, verify_toml_manifest
+
+    if path.suffix == ".toml":
+        result = verify_toml_manifest(path)
+        if result["valid"]:
+            console.print("[green]Y[/] Plugin manifest is valid")
+            console.print(f"  Name: {result['manifest'].get('plugin', {}).get('name', '?')}")
+            console.print(f"  Version: {result['manifest'].get('plugin', {}).get('version', '?')}")
+        else:
+            display_error("Invalid manifest", "; ".join(result["errors"]))
+            raise typer.Exit(code=1)
+    elif path.suffix in (".py", ".whl"):
+        expected = typer.prompt("Expected SHA-256 hash (optional)", default="", show_default=False)
+        if expected:
+            if verify_plugin_hash(path, expected):
+                console.print("[green]Y[/] Plugin hash matches")
+            else:
+                display_error("Hash mismatch", "Expected hash does not match computed hash")
+                raise typer.Exit(code=1)
+        else:
+            from hashlib import sha256
+            actual = sha256(path.read_bytes()).hexdigest()
+            console.print("[yellow]![/] No hash provided to verify against")
+            console.print(f"  SHA-256: {actual}")
+    else:
+        display_error("Unsupported format", "Plugin must be .toml, .py, or .whl")
+        raise typer.Exit(code=1)
 
 
 # ======================================================================

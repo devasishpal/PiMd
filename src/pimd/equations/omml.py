@@ -78,14 +78,20 @@ def _m(name: str) -> Any:
 
 
 def _mk_run(text: str, italic: bool = True) -> Any:
-    """Create an OMML run (m:r) with optional italic formatting."""
+    """Create an OMML run (m:r) with Cambria Math font and optional italic."""
     r = _m("r")
+    w_rPr = OxmlElement("w:rPr")
+    rFonts = OxmlElement("w:rFonts")
+    rFonts.set(qn("w:ascii"), "Cambria Math")
+    rFonts.set(qn("w:hAnsi"), "Cambria Math")
+    w_rPr.append(rFonts)
+    r.append(w_rPr)
     if italic:
-        rPr = _m("rPr")
+        m_rPr = _m("rPr")
         ital = _m("ital")
         ital.set(qn("m:val"), "1")
-        rPr.append(ital)
-        r.append(rPr)
+        m_rPr.append(ital)
+        r.append(m_rPr)
     t = _m("t")
     t.set(qn("xml:space"), "preserve")
     t.text = sanitize_text(text)
@@ -96,11 +102,14 @@ def _mk_run(text: str, italic: bool = True) -> Any:
 def _mk_run_bold(text: str) -> Any:
     """Create a bold OMML run."""
     r = _m("r")
-    rPr = _m("rPr")
-    b = _m("sty")
-    b.set(qn("m:val"), "b")
-    rPr.append(b)
-    r.append(rPr)
+    w_rPr = OxmlElement("w:rPr")
+    rFonts = OxmlElement("w:rFonts")
+    rFonts.set(qn("w:ascii"), "Cambria Math")
+    rFonts.set(qn("w:hAnsi"), "Cambria Math")
+    w_rPr.append(rFonts)
+    w_b = OxmlElement("w:b")
+    w_rPr.append(w_b)
+    r.append(w_rPr)
     t = _m("t")
     t.set(qn("xml:space"), "preserve")
     t.text = sanitize_text(text)
@@ -109,12 +118,18 @@ def _mk_run_bold(text: str) -> Any:
 
 
 def _mk_script(base: Any, sub: Any | None, sup: Any | None) -> Any:
-    """Create superscript, subscript, or sub-sup combination."""
+    """Create superscript, subscript, or sub-sup combination.
+
+    Word expects: m:sSup > m:e(base) + m:sup(superscript),
+    m:sSub > m:e(base) + m:sub(subscript),
+    m:sSubSup > m:e(base) + m:sub(sub) + m:sup(sup).
+    The sub/sup element contains content directly (no m:e wrapper).
+    """
     if sub is not None and sup is not None:
-        elem = _m("subSup")
-        e = _m("e")
-        e.append(base)
-        elem.append(e)
+        elem = _m("sSubSup")
+        e1 = _m("e")
+        e1.append(base)
+        elem.append(e1)
         sub_e = _m("sub")
         sub_e.append(sub)
         elem.append(sub_e)
@@ -123,28 +138,31 @@ def _mk_script(base: Any, sub: Any | None, sup: Any | None) -> Any:
         elem.append(sup_e)
         return elem
     elif sup is not None:
-        elem = _m("sup")
-        e = _m("e")
-        e.append(base)
-        elem.append(e)
-        lim = _m("lim")
-        lim.append(sup)
-        elem.append(lim)
+        elem = _m("sSup")
+        e1 = _m("e")
+        e1.append(base)
+        elem.append(e1)
+        sup_e = _m("sup")
+        sup_e.append(sup)
+        elem.append(sup_e)
         return elem
     elif sub is not None:
-        elem = _m("sub")
-        e = _m("e")
-        e.append(base)
-        elem.append(e)
-        lim = _m("lim")
-        lim.append(sub)
-        elem.append(lim)
+        elem = _m("sSub")
+        e1 = _m("e")
+        e1.append(base)
+        elem.append(e1)
+        sub_e = _m("sub")
+        sub_e.append(sub)
+        elem.append(sub_e)
         return elem
     return base
 
 
 def _mk_nary(symbol: str, base: Any, lower: Any | None, upper: Any | None) -> Any:
-    """Create an n-ary operator (integral, sum, product)."""
+    """Create an n-ary operator (integral, sum, product).
+
+    Word expects sub/sup content directly inside m:sub/m:sup (no m:e wrapper).
+    """
     nary = _m("nary")
     naryPr = _m("naryPr")
     chr_elem = _m("chr")
@@ -334,6 +352,74 @@ def _resolve_symbol(name: str) -> str | None:
     return None
 
 
+def _extract_text_arg(tokens: list[str], i: int) -> tuple[str | None, int]:
+    """Extract text from a braced argument, handling single or multi-token groups.
+
+    Returns (text_content, new_index) or (None, i) if no argument found.
+    """
+    idx = i + 1
+    if idx >= len(tokens):
+        return None, i
+
+    token = tokens[idx]
+
+    # Multi-token group: { ... }
+    if token == "{":
+        depth = 1
+        j = idx + 1
+        parts: list[str] = []
+        while j < len(tokens) and depth > 0:
+            if tokens[j] == "{":
+                depth += 1
+            elif tokens[j] == "}":
+                depth -= 1
+            if depth > 0:
+                parts.append(tokens[j])
+            j += 1
+        return "".join(parts), j
+
+    # Single-token group: {content}
+    if len(token) > 2 and token.startswith("{") and token.endswith("}"):
+        return token[1:-1], idx + 1
+
+    return None, i
+
+
+def _parse_one_group(tokens: list[str], start: int) -> tuple[Any, int]:
+    """Parse a single LaTeX group (braced block or bare token).
+
+    Returns (OMML element, index after the group).
+    """
+    if start >= len(tokens):
+        return _mk_run(""), start
+
+    token = tokens[start]
+
+    # Braced group { ... } as individual tokens
+    if token == "{":
+        depth = 1
+        j = start + 1
+        while j < len(tokens) and depth > 0:
+            if tokens[j] == "{":
+                depth += 1
+            elif tokens[j] == "}":
+                depth -= 1
+            j += 1
+        inner = tokens[start + 1 : j - 1]
+        elem, _ = _build_group(inner, 0)
+        return (elem if elem is not None else _mk_run("")), j
+
+    # Braced group token from tokenizer: {-\infty} etc.
+    if len(token) > 2 and token.startswith("{") and token.endswith("}"):
+        inner_tokens = tokenize(token[1:-1])
+        elem, _ = _build_group(inner_tokens, 0)
+        return (elem if elem is not None else _mk_run("")), start + 1
+
+    # Single token — parse it with _build_group
+    elem, _ = _build_group([token], 0)
+    return (elem if elem is not None else _mk_run("")), start + 1
+
+
 def _build_group(tokens: list[str], start: int) -> tuple[Any, int]:
     """Parse tokens[start:] and return (OMML element, new_index)."""
     elements: list[Any] = []
@@ -359,6 +445,15 @@ def _build_group(tokens: list[str], start: int) -> tuple[Any, int]:
             i = j
             continue
 
+        # --- Braced group token from tokenizer: {-\infty} etc. ---
+        if len(token) > 2 and token.startswith("{") and token.endswith("}"):
+            inner_tokens = tokenize(token[1:-1])
+            group_elem, _ = _build_group(inner_tokens, 0)
+            if group_elem is not None:
+                elements.append(group_elem)
+            i += 1
+            continue
+
         if token == "}":
             break
 
@@ -368,8 +463,8 @@ def _build_group(tokens: list[str], start: int) -> tuple[Any, int]:
 
             # \frac
             if cmd == "frac":
-                num_elem, i = _build_group(tokens, i + 1)
-                den_elem, i = _build_group(tokens, i + 1)
+                num_elem, i = _parse_one_group(tokens, i + 1)
+                den_elem, i = _parse_one_group(tokens, i)
                 if num_elem is not None and den_elem is not None:
                     elements.append(_mk_fraction(num_elem, den_elem))
                 continue
@@ -379,24 +474,23 @@ def _build_group(tokens: list[str], start: int) -> tuple[Any, int]:
                 degree_elem = None
                 idx = i + 1
                 if idx < len(tokens) and tokens[idx] == "[":
-                    idx += 1
                     depth = 1
+                    j = idx + 1
                     bracket_tokens = []
-                    while idx < len(tokens) and depth > 0:
-                        if tokens[idx] == "[":
+                    while j < len(tokens) and depth > 0:
+                        if tokens[j] == "[":
                             depth += 1
-                        elif tokens[idx] == "]":
+                        elif tokens[j] == "]":
                             depth -= 1
                             if depth > 0:
-                                bracket_tokens.append(tokens[idx])
+                                bracket_tokens.append(tokens[j])
                         else:
-                            bracket_tokens.append(tokens[idx])
-                        idx += 1
+                            bracket_tokens.append(tokens[j])
+                        j += 1
                     if bracket_tokens:
                         degree_elem, _ = _build_group(bracket_tokens, 0)
-                else:
-                    idx = i + 1
-                radicand_elem, i = _build_group(tokens, idx)
+                    idx = j
+                radicand_elem, i = _parse_one_group(tokens, idx)
                 if radicand_elem is not None:
                     elements.append(_mk_radical(radicand_elem, degree_elem))
                 continue
@@ -408,9 +502,9 @@ def _build_group(tokens: list[str], start: int) -> tuple[Any, int]:
                 lower = None
                 upper = None
                 if idx < len(tokens) and tokens[idx] == "_":
-                    lower, idx = _build_group(tokens, idx + 1)
+                    lower, idx = _parse_one_group(tokens, idx + 1)
                 if idx < len(tokens) and tokens[idx] == "^":
-                    upper, idx = _build_group(tokens, idx + 1)
+                    upper, idx = _parse_one_group(tokens, idx + 1)
                 base_elem, idx = _build_group(tokens, idx)
                 base = base_elem if base_elem is not None else _mk_run("")
                 elements.append(_mk_nary(symbol, base, lower, upper))
@@ -422,7 +516,7 @@ def _build_group(tokens: list[str], start: int) -> tuple[Any, int]:
                 idx = i + 1
                 lower = None
                 if idx < len(tokens) and tokens[idx] == "_":
-                    lower, idx = _build_group(tokens, idx + 1)
+                    lower, idx = _parse_one_group(tokens, idx + 1)
                 elements.append(_mk_run("lim", italic=False))
                 if lower is not None:
                     lim_elem = _m("limLow")
@@ -439,8 +533,8 @@ def _build_group(tokens: list[str], start: int) -> tuple[Any, int]:
                 idx = i + 1
                 sub_elem = None
                 if idx < len(tokens) and tokens[idx] == "_":
-                    sub_elem, idx = _build_group(tokens, idx + 1)
-                arg_elem, idx = _build_group(tokens, idx)
+                    sub_elem, idx = _parse_one_group(tokens, idx + 1)
+                arg_elem, idx = _parse_one_group(tokens, idx)
                 if sub_elem is not None:
                     elem = _mk_script(_mk_run(cmd, italic=False), sub_elem, None)
                     elements.append(elem)
@@ -453,29 +547,65 @@ def _build_group(tokens: list[str], start: int) -> tuple[Any, int]:
 
             # \text
             if cmd == "text":
-                idx = i + 1
-                if idx < len(tokens) and tokens[idx] == "{":
-                    # Find matching }
-                    text_tokens = []
-                    depth = 1
-                    j = idx + 1
-                    while j < len(tokens) and depth > 0:
-                        if tokens[j] == "{":
-                            depth += 1
-                        elif tokens[j] == "}":
-                            depth -= 1
-                        if depth > 0:
-                            text_tokens.append(tokens[j])
-                        j += 1
-                    text = "".join(text_tokens)
+                text, i = _extract_text_arg(tokens, i)
+                if text is not None:
                     elements.append(_mk_run(text, italic=False))
-                    i = j
-                    continue
+                continue
 
             # \left, \right, \bigl, \bigr, etc.
             if cmd in ("left", "right", "bigl", "bigr", "big", "Bigl", "Bigr", "Big"):
-                # Just skip size commands
                 i += 1
+                continue
+
+            # \begin{env}, \end{env} — skip both the command and its {env} argument
+            if cmd in ("begin", "end"):
+                idx = i + 1
+                if idx < len(tokens):
+                    token = tokens[idx]
+                    if token == "{":
+                        depth = 1
+                        j = idx + 1
+                        while j < len(tokens) and depth > 0:
+                            if tokens[j] == "{":
+                                depth += 1
+                            elif tokens[j] == "}":
+                                depth -= 1
+                            j += 1
+                        i = j
+                    elif len(token) > 2 and token.startswith("{") and token.endswith("}"):
+                        i = idx + 1
+                    else:
+                        i = idx
+                else:
+                    i += 1
+                continue
+
+            # \binom
+            if cmd == "binom":
+                top_elem, i = _parse_one_group(tokens, i + 1)
+                bot_elem, i = _parse_one_group(tokens, i)
+                if top_elem is not None and bot_elem is not None:
+                    delim = _mk_delimiter(
+                        _mk_fraction(top_elem, bot_elem),
+                        "(", ")",
+                    )
+                    elements.append(delim)
+                continue
+
+            # Accent commands: \hat, \bar, \dot, \ddot, \tilde, \vec
+            if cmd in ("hat", "bar", "dot", "ddot", "tilde", "vec"):
+                accented, i = _parse_one_group(tokens, i + 1)
+                if accented is not None:
+                    bar = _m("bar")
+                    barPr = _m("barPr")
+                    pos = _m("pos")
+                    pos.set(qn("m:val"), "top")
+                    barPr.append(pos)
+                    bar.append(barPr)
+                    e = _m("e")
+                    e.append(accented)
+                    bar.append(e)
+                    elements.append(bar)
                 continue
 
             # \cdot, \times, etc. handled by LATEX_SYMBOL_MAP
@@ -487,29 +617,19 @@ def _build_group(tokens: list[str], start: int) -> tuple[Any, int]:
                 i += 1
                 continue
 
-            # \mathbf, \mathrm, \mathit
+            # \mathbf, \mathrm, \mathit, \mathcal, \mathbb, \mathscr
             if cmd in ("mathbf", "mathrm", "mathit", "mathcal", "mathbb", "mathscr"):
-                idx = i + 1
-                if idx < len(tokens) and tokens[idx] == "{":
-                    inner_text = []
-                    depth = 1
-                    j = idx + 1
-                    while j < len(tokens) and depth > 0:
-                        if tokens[j] == "{":
-                            depth += 1
-                        elif tokens[j] == "}":
-                            depth -= 1
-                        if depth > 0:
-                            inner_text.append(tokens[j])
-                        j += 1
-                    text = "".join(inner_text)
-                    is_bold = cmd == "mathbf"
-                    is_ital = cmd == "mathit"
-                    elements.append(
-                        _mk_run_bold(text) if is_bold else _mk_run(text, italic=is_ital)
-                    )
-                    i = j
-                    continue
+                text, i = _extract_text_arg(tokens, i)
+                if text is not None:
+                    if cmd == "mathbf":
+                        elements.append(_mk_run_bold(text))
+                    elif cmd == "mathrm":
+                        elements.append(_mk_run(text, italic=False))
+                    elif cmd == "mathit":
+                        elements.append(_mk_run(text, italic=True))
+                    else:
+                        elements.append(_mk_run(text, italic=True))
+                continue
 
             # Unknown command — output as-is
             ch = _resolve_symbol(cmd)

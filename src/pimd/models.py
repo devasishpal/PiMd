@@ -28,7 +28,7 @@ class Span:
     subscript: bool = False
     math: str | None = None
     math_display: bool = False
-    omml: object | None = None  # OMML XML element
+    png: bytes | None = None
 
 
 # ======================================================================
@@ -66,6 +66,9 @@ class CodeBlock:
     code: str
     language: str | None = None
 
+    def plain_text(self) -> str:
+        return self.code
+
 
 @dataclass
 class Blockquote:
@@ -73,12 +76,22 @@ class Blockquote:
 
     children: list[Block] = field(default_factory=list)
 
+    def plain_text(self) -> str:
+        return "\n".join(
+            _plain_text(child) for child in self.children
+        )
+
 
 @dataclass
 class ListItem:
     """A single item inside a list, containing nested blocks."""
 
     children: list[Block] = field(default_factory=list)
+
+    def plain_text(self) -> str:
+        return " ".join(
+            _plain_text(child) for child in self.children
+        )
 
 
 @dataclass
@@ -88,12 +101,23 @@ class OrderedList:
     items: list[ListItem] = field(default_factory=list)
     start: int = 1
 
+    def plain_text(self) -> str:
+        return "\n".join(
+            f"{self.start + i}. {item.plain_text()}"
+            for i, item in enumerate(self.items)
+        )
+
 
 @dataclass
 class BulletList:
     """An unordered (bulleted) list."""
 
     items: list[ListItem] = field(default_factory=list)
+
+    def plain_text(self) -> str:
+        return "\n".join(
+            f"- {item.plain_text()}" for item in self.items
+        )
 
 
 @dataclass
@@ -103,10 +127,22 @@ class Table:
     headers: list[str] = field(default_factory=list)
     rows: list[list[str]] = field(default_factory=list)
 
+    def plain_text(self) -> str:
+        lines: list[str] = []
+        if self.headers:
+            lines.append(" | ".join(self.headers))
+            lines.append("-+-".join("-" * len(h) for h in self.headers))
+        for row in self.rows:
+            lines.append(" | ".join(row))
+        return "\n".join(lines)
+
 
 @dataclass
 class HorizontalRule:
     """A thematic break / horizontal rule."""
+
+    def plain_text(self) -> str:
+        return "---"
 
 
 @dataclass
@@ -116,6 +152,9 @@ class Image:
     alt: str
     url: str
     title: str | None = None
+
+    def plain_text(self) -> str:
+        return self.alt or f"[Image: {self.url}]"
 
 
 @dataclass
@@ -146,15 +185,24 @@ class Diagram:
     figure_number: int | None = None
     error: str | None = None
 
+    def plain_text(self) -> str:
+        parts: list[str] = []
+        if self.caption:
+            parts.append(self.caption)
+        if self.alt:
+            parts.append(self.alt)
+        if self.error:
+            parts.append(f"[Error: {self.error}]")
+        return " | ".join(parts) if parts else f"[Diagram: {self.language}]"
+
 
 @dataclass
 class EquationBlock:
-    """A display (block) equation rendered as OMML or SVG."""
+    """A display (block) equation rendered as PNG image."""
 
     latex: str
     display: bool = True
-    omml: object | None = None
-    svg: str | None = None
+    png: bytes | None = None
     label: str | None = None
     number: int | None = None
     error: str | None = None
@@ -178,6 +226,21 @@ except ImportError:
         content_lines: list[str] = field(default_factory=list)
         color: str = ""
         icon: str = ""
+
+        def plain_text(self) -> str:
+            parts: list[str] = []
+            if self.title:
+                parts.append(self.title)
+            if self.content_lines:
+                parts.extend(self.content_lines)
+            return "\n".join(parts)
+
+
+def _plain_text(block: Block) -> str:
+    """Safe helper: call plain_text on any block, or return empty string."""
+    if hasattr(block, "plain_text"):
+        return block.plain_text()
+    return str(block) if block is not None else ""
 
 
 Block = (

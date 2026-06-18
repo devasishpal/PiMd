@@ -607,8 +607,6 @@ class EpubRenderer:
             return f"<p><em>[Diagram: {alt}]</em></p>\n"
 
         if isinstance(block, EquationBlock):
-            if block.omml is not None:
-                return '<p class="equation">[Equation]</p>\n'
             latex = self._escape(block.latex)
             num = f' <span class="equation-number">({block.number})</span>' if block.number is not None else ""
             return f'<p class="equation">\\({latex}\\){num}</p>\n'

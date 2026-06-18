@@ -28,6 +28,20 @@ Enterprise features::
 from pimd.accessibility import AccessibilityEngine, AccessibilityReport
 from pimd.analyzer import AnalysisIssue, AnalysisReport, ProjectAnalyzer
 from pimd.api import PiMD
+
+# New modules — API lifecycle & ecosystem
+from pimd.api_stability import (
+    ApiStatus,
+    beta,
+    deprecated,
+    experimental,
+    get_api_alternative,
+    get_api_removal,
+    get_api_since,
+    get_api_status,
+    internal,
+    stable,
+)
 from pimd.attachments import Attachment, AttachmentConfig, AttachmentType
 from pimd.batch import BatchProcessor
 from pimd.books import BookCompiler, BookConfig
@@ -40,6 +54,9 @@ from pimd.caching.redis_cache import (
     redis_available,
 )
 
+# New modules — unified cache
+from pimd.caching.unified import UnifiedCacheManager, UnifiedCacheStats, get_cache, reset_cache
+
 # New modules — engine features
 from pimd.callouts import CalloutBlock, CalloutConfig, CalloutType
 from pimd.citations import CitationEngine, CitationEntry, CitationStyle
@@ -49,7 +66,7 @@ from pimd.compatibility import CompatibilityLayer, FlavorDetectionResult, Markdo
 from pimd.config import Config, ConfigSchemaEntry
 from pimd.converters.html import HTMLConverter, html_to_docx
 from pimd.converters.markdown import MarkdownConverter
-from pimd.deprecation import deprecate_parameter, deprecated
+from pimd.deprecation import deprecate_parameter
 from pimd.diagrams import (
     DIAGRAM_LANGUAGES,
     DiagramEngine,
@@ -69,7 +86,17 @@ from pimd.diagrams import (
 from pimd.diagrams.models import DiagramConfig
 from pimd.docusaurus import DocusaurusConfig, DocusaurusProject, DocusaurusProjectConverter
 from pimd.equations import EquationConfig, EquationEngine, EquationResult
-from pimd.exceptions import ConversionError, ParserError, PiMDError, RendererError
+from pimd.exceptions import (
+    CacheError,
+    ConfigError,
+    ConversionError,
+    DiagramError,
+    ParserError,
+    PiMDError,
+    PluginError,
+    RendererError,
+    SecurityError,
+)
 from pimd.export import ExportConverter, ExportFormat, ExportOptions
 from pimd.export.formats.epub import EpubRenderer, validate_epub
 from pimd.export.formats.latex import LatexRenderer
@@ -118,6 +145,9 @@ from pimd.plugins import PLUGIN_TYPES, PluginMetadata
 from pimd.profiles import ExportProfile, ProfileManager, ProfileType
 from pimd.project import ProjectConverter, ProjectResult
 from pimd.recovery import RecoveryContext, RecoveryReport, RecoveryWarning
+
+# New modules — capability registry
+from pimd.registry import Capability, CapabilityRegistry, CapabilityType, get_registry, reset_registry
 from pimd.remote_assets import RemoteAssetConfig, RemoteAssetManager
 from pimd.reports import ReportConfig, ReportEngine, ReportType
 
@@ -147,6 +177,9 @@ from pimd.sdk import (
     TemplatePlugin,
     ValidationPlugin,
 )
+
+# New modules — security
+from pimd.security import SafeSubprocess, safe_temp_dir, sanitize_svg, sanitize_svg_file, scan_for_secrets, verify_plugin_hash, verify_toml_manifest
 from pimd.sphinx import RSTtoMarkdownConverter, SphinxConfig, SphinxProject, SphinxProjectConverter
 from pimd.streaming import ChunkProcessor, LargeFileHandler, StreamingMarkdownReader
 from pimd.templates import Template, TemplateConfig, TemplateManager, TemplateType
@@ -169,6 +202,41 @@ __all__ = [
     "ConversionError",
     "ParserError",
     "RendererError",
+    "DiagramError",
+    "PluginError",
+    "ConfigError",
+    "SecurityError",
+    "CacheError",
+    # API stability
+    "ApiStatus",
+    "stable",
+    "beta",
+    "experimental",
+    "deprecated",
+    "internal",
+    "get_api_status",
+    "get_api_since",
+    "get_api_removal",
+    "get_api_alternative",
+    # Capability registry
+    "CapabilityRegistry",
+    "CapabilityType",
+    "Capability",
+    "get_registry",
+    "reset_registry",
+    # Unified cache
+    "UnifiedCacheManager",
+    "UnifiedCacheStats",
+    "get_cache",
+    "reset_cache",
+    # Security
+    "sanitize_svg",
+    "sanitize_svg_file",
+    "verify_plugin_hash",
+    "verify_toml_manifest",
+    "SafeSubprocess",
+    "scan_for_secrets",
+    "safe_temp_dir",
     # Diagrams — PiDraw integration
     "DiagramEngine",
     "DiagramRegistry",

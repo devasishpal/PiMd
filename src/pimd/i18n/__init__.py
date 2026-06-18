@@ -224,7 +224,9 @@ def apply_bidi(text: str, base_dir: str = "auto") -> str:
         if base_dir == "auto":
             script = detect_script(text)
             base_dir = "rtl" if script == ScriptType.RTL else "ltr"
-        return get_display(text, base_dir=base_dir)
+        # python-bidi expects single-char: 'L' (LTR), 'R' (RTL), or 'AL' (Arabic letter)
+        mapped = {"ltr": "L", "rtl": "R", "auto": "L"}
+        return get_display(text, base_dir=mapped.get(base_dir.lower(), "L"))
     except ImportError:
         return text
 

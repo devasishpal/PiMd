@@ -32,31 +32,21 @@ class TestEquationResult:
         assert r.error is None
         assert not r.cached
 
-    def test_success_with_omml(self) -> None:
-        r = EquationResult(source="x", latex="x", omml="<fake>")
-        assert r.success
-        assert r.has_omml
-
-    def test_success_with_svg(self) -> None:
-        r = EquationResult(source="x", latex="x", svg="<svg/>")
-        assert r.success
-        assert not r.has_omml
-
-    def test_success_both(self) -> None:
-        r = EquationResult(source="x", latex="x", omml="<fake>", svg="<svg/>")
+    def test_success_with_png(self) -> None:
+        r = EquationResult(source="x", latex="x", png=b"<png>")
         assert r.success
 
     def test_failure(self) -> None:
         r = EquationResult(source="x", latex="x", error="Parse error")
         assert not r.success
-        assert not r.has_omml
+        assert not r.png
 
     def test_to_dict(self) -> None:
         r = EquationResult(
             source="src",
             latex=r"E=mc^2",
             display=True,
-            omml="<fake>",
+            png=b"<png>",
             label="eq:1",
             number=1,
             render_time=0.5,
@@ -64,7 +54,7 @@ class TestEquationResult:
         d = r.to_dict()
         assert d["latex"] == r"E=mc^2"
         assert d["display"]
-        assert d["has_omml"]
+        assert d["has_png"]
         assert d["success"]
         assert d["label"] == "eq:1"
         assert d["number"] == 1
@@ -467,15 +457,14 @@ class TestEquationIntegration:
 
     def test_equation_block_model(self) -> None:
         """EquationBlock stores OMML or fallback correctly."""
-        import xml.etree.ElementTree as ET
 
-        # Simulate an OMML result
+        # Simulate a PNG result
         block = EquationBlock(
             latex=r"E=mc^2",
             display=True,
-            omml=ET.Element("{http://schemas.openxmlformats.org/officeDocument/2006/math}oMath"),
+            png=b"<fake-png>",
         )
-        assert block.omml is not None
+        assert block.png is not None
         assert block.latex == r"E=mc^2"
 
     def test_equationerror_fallback(self, tmp_path: Path) -> None:

@@ -5,7 +5,7 @@ All diagram rendering is delegated to PiDraw.
 
 from pathlib import Path
 
-from pimd.diagrams import DiagramEngine, DiagramRegistry
+from pimd.diagrams import DiagramEngine
 from pimd.diagrams.pidraw_integration import (
     detect_language as _pidraw_detect,
 )
@@ -290,7 +290,7 @@ class MarkdownConverter:
                 result = engine._process_paragraph(block)
                 if result[1]:
                     eq_block = result[0]
-                    if eq_block.omml is not None or eq_block.svg is not None:
+                    if eq_block.png is not None:
                         new_blocks.append(eq_block)
                     else:
                         new_blocks.append(block)
@@ -369,8 +369,7 @@ def _default_equation_engine() -> EquationEngine | None:
 
 def _default_diagram_engine() -> DiagramEngine | None:
     """Build a diagram engine backed by PiDraw."""
-    registry = DiagramRegistry()
-    return DiagramEngine(registry=registry)
+    return DiagramEngine()
 
 
 def _count_words(text: str) -> int:

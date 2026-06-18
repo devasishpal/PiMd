@@ -15,3 +15,23 @@ class ParserError(PiMDError):
 
 class RendererError(PiMDError):
     """Raised when rendering output content (DOCX) fails."""
+
+
+class DiagramError(PiMDError):
+    """Raised when diagram rendering fails (internal, not user-facing)."""
+
+
+class PluginError(PiMDError):
+    """Raised by plugin system during registration, dispatch, or lifecycle."""
+
+
+class ConfigError(PiMDError):
+    """Raised for invalid configuration."""
+
+
+class SecurityError(PiMDError):
+    """Raised when a security check fails."""
+
+
+class CacheError(PiMDError):
+    """Raised on cache backend failures."""

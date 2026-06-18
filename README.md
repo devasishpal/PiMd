@@ -5,231 +5,101 @@
 <h1 align="center">PiMD</h1>
 
 <p align="center">
-  <em>Professional document generation and publishing framework for Python.</em>
+  <em>Publish documents from Markdown. Professional output. Zero config.</em>
 </p>
 
 <p align="center">
   <a href="https://pypi.org/project/pimd/"><img src="https://img.shields.io/pypi/v/pimd" alt="PyPI"></a>
   <a href="https://pypi.org/project/pimd/"><img src="https://img.shields.io/pypi/pyversions/pimd" alt="Python Versions"></a>
   <a href="https://pypi.org/project/pimd/"><img src="https://img.shields.io/pypi/dm/pimd" alt="Downloads"></a>
-<a href="https://pepy.tech/projects/pimd">
-    <img src="https://static.pepy.tech/badge/pimd" alt="Total Downloads">
-</a>
   <a href="https://github.com/devasishpal/PiMd/actions"><img src="https://img.shields.io/github/actions/workflow/status/devasishpal/PiMd/ci.yml?branch=main" alt="Build"></a>
-  <a href="https://github.com/devasishpal/PiMd/actions"><img src="https://img.shields.io/github/actions/workflow/status/devasishpal/PiMd/ci.yml?branch=main&label=tests" alt="Tests"></a>
-  <a href="https://github.com/devasishpal/PiMd/blob/main/CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-v2.2.0-blue" alt="Changelog"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
 </p>
 
 ---
 
-**PiMD** (Python Markdown Publisher) converts Markdown, HTML, and documentation repositories into professional DOCX, EPUB, PDF/A, and LaTeX documents — books, reports, technical manuals, research papers, e-books, invoices, and more. It runs entirely offline with zero cloud dependencies.
+**PiMD** (Python Markdown Publisher) converts Markdown and HTML into professional DOCX, EPUB, PDF/A, and LaTeX documents — books, reports, technical manuals, research papers, and more. It runs entirely offline with zero cloud dependencies.
 
 ---
 
-- [What is PiMD?](#what-is-pimd)
-- [Why PiMD?](#why-pimd)
-- [Key Features](#key-features)
-- [Quick Start](#quick-start)
-- [Architecture](#architecture)
-- [Feature Showcase](#feature-showcase)
-- [EPUB Output](#epub-output)
-- [LaTeX Output](#latex-output)
-- [PDF/A Output](#pdfa-output)
-- [DOCX Quality](#docx-quality)
-- [Diagram Support](#diagram-support)
-- [Scientific Publishing](#scientific-publishing)
-- [Internationalization (i18n)](#internationalization-i18n)
-- [Collaborative Editing](#collaborative-editing)
-- [Templates](#templates)
-- [Plugin Ecosystem](#plugin-ecosystem)
-- [Backend Integration](#backend-integration)
-- [CLI Reference](#cli-reference)
-- [Configuration](#configuration)
-- [Performance](#performance)
-- [Project Structure](#project-structure)
-- [Roadmap](#roadmap)
-- [Contributing](#contributing)
-- [License](#license)
+## Comparison with Alternatives
+
+PiMD fills a unique niche — it is the only Markdown-to-DOCX engine with built-in diagram rendering, equation-to-OMML conversion, and Python-native plugin system. Here's how it stacks up:
+
+| Feature | PiMD | Pandoc | MkDocs | Sphinx | Quarto | Typst |
+|---------|------|--------|--------|--------|--------|-------|
+| **DOCX output** | ✅ Professional typography, TOC, cross-refs, page numbers, watermarks | ✅ Basic (pandoc-crossref for references) | ❌ | ❌ | ❌ | ⚠️ Experimental |
+| **DOCX templates** | ✅ 10 presets + inheritance + custom | ✅ Custom reference-docx | ❌ | ❌ | ❌ | ❌ |
+| **EPUB 3.2** | ✅ Full support, TOC, MathML, SVG | ✅ EPUB 2/3 | ❌ | ❌ | ✅ | ❌ |
+| **PDF/A archival** | ✅ Native (fpdf2) | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **LaTeX output** | ✅ Clean, compilable .tex | ✅ Native LaTeX | ❌ | ✅ Native | ✅ | ❌ |
+| **HTML output** | ✅ Responsive, standalone or site | ✅ | ✅ Static site | ✅ Static site | ✅ Static site | ❌ |
+| **Diagrams** (Mermaid/PlantUML/Graphviz/D2/BlockDiag/Vega) | ✅ **Built-in** via PiDraw | ❌ Manual pre-render | ⚠️ Plugin-only | ⚠️ Extension-only | ❌ Manual | ❌ |
+| **Equations** (LaTeX → OMML/SVG/HTML) | ✅ **Native Word OMML** for DOCX, MathJax for HTML | ✅ MathML, TeX | ❌ | ✅ MathJax/Sphinx | ✅ MathJax/Katex | ✅ Native |
+| **Zero config** | ✅ `pip install pimd` → `pimd md file.md file.docx` | ✅ `pandoc file.md -o file.docx` | ❌ Requires mkdocs.yml | ❌ conf.py required | ❌ _quarto.yml required | ❌ Typst file required |
+| **Python API** | ✅ First-class importable library | ⚠️ Via subprocess/haskell-bindings | ⚠️ Via plugins | ✅ sphinx-build programmatic | ❌ CLI only | ❌ CLI only |
+| **Plugin system** | ✅ 9 typed hook types + SDK + event bus | ⚠️ Lua filters (typed? no) | ⚠️ Theme/plugin | ✅ Extension API | ❌ | ❌ |
+| **WCAG validation** | ✅ **Built-in accessibility engine** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **i18n / RTL** | ✅ Arabic/Persian/Urdu reshaping, CJK, 15+ locales | ✅ via `--pdf-engine` options | ⚠️ Theme-dependent | ⚠️ Babel/Intl | ✅ locale support | ✅ Native |
+| **BibTeX citations** | ✅ Built-in | ✅ citeproc | ❌ | ✅ built-in | ✅ | ❌ |
+| **Incremental build** | ✅ Skip unchanged files | ❌ | ✅ | ✅ | ✅ | ❌ |
+| **Caching** (memory/fs/Redis) | ✅ **Three backends** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **CLI watch mode** | ✅ File watching | ❌ | ✅ auto-reload | ✅ auto-reload | ✅ auto-reload | ❌ |
+| **Batch processing** | ✅ Directory batch + output mapping | ⚠️ Shell scripts | ✅ | ✅ | ✅ | ❌ |
+| **Safety guards** | ✅ Loop detection, path traversal protection, timeout enforcement | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Offline** | ✅ **100% offline**, zero cloud | ✅ | ⚠️ Search requires online | ✅ | ⚠️ Some features online | ✅ |
+| **Language** | Python 3.10+ | Haskell | Python | Python | Python/R | Rust |
+
+**When to use PiMD:**
+- You need **professional DOCX** with diagrams, equations, and templates from Markdown
+- You want a **Python API** to integrate with FastAPI/Django/Flask
+- You need **WCAG-compliant accessible documents**
+- You're building **scientific papers, technical manuals, or books** with diagrams and equations
+- You want **zero-config** conversion without YAML config files
+
+**When to use alternatives:**
+- **Pandoc**: If you need the broadest format support and are comfortable with Haskell filters
+- **MkDocs / Sphinx**: If you're building documentation websites (static HTML is the primary output)
+- **Quarto**: If you're in the R/Python statistical computing ecosystem and want HTML-first publishing
+- **Typst**: If you want a fresh typesetting language and don't need DOCX/EPUB output
 
 ---
-
-## What is PiMD?
-
-PiMD is a **document generation and publishing framework** for Python. It takes structured text formats — Markdown, HTML, documentation repositories — and produces **publish-ready DOCX output** with professional typography, diagrams, equations, citations, cross-references, tables of contents, headers and footers.
-
-Unlike simple Markdown-to-DOCX converters, PiMD provides:
-
-- A **full document model** — headings, paragraphs, code blocks, tables, lists, images, diagrams, equations, callouts, and footnotes are all first-class citizens
-- A **plugin architecture** and **Extension SDK** for custom renderers, parsers, and publishing pipelines
-- A **template engine** with inheritance, 10 preset templates, and full customization
-- **Diagram rendering** powered by [PiDraw](https://pypi.org/project/pidraw/) — Mermaid, PlantUML, Graphviz, D2, BlockDiag, Vega, BPMN, ASCII art, and any engine PiDraw supports
-- **Equation rendering** with LaTeX, MathJax, KaTeX, and native Word OMML
-- **Scientific publishing** — cross-references, bibliography, equation numbering, figure numbering
-- **Enterprise features** — incremental builds, parallel processing, streaming, caching, safety guards, accessibility validation
-
-PiMD is designed to be used both as a **Python library** (integrate into FastAPI, Flask, Django, or any Python application) and as a **standalone CLI tool** for batch processing, watch mode, and CI/CD pipelines.
-
-## Why PiMD?
-
-### vs Pandoc
-
-| | PiMD | Pandoc |
-|---|---|---|
-| **Primary output** | DOCX with professional-quality rendering | General-purpose document conversion |
-| **Templates** | Built-in template engine with 10 presets | Template system via partials |
-| **Diagrams** | PiDraw-powered: Mermaid, PlantUML, Graphviz, D2, BlockDiag, Vega, BPMN, ASCII | None built-in |
-| **Equations** | LaTeX, MathJax, KaTeX, native Word OMML | LaTeX via MathJax |
-| **Plugin system** | Full plugin architecture with SDK | Filters and custom writers |
-| **Python API** | First-class library API | Haket filters or shell |
-| **Accessibility** | Built-in WCAG validation | None |
-
-PiMD focuses on producing **publish-ready DOCX output** with professional styling, diagrams, and equations — not general-purpose format conversion.
-
-### vs Sphinx
-
-| | PiMD | Sphinx |
-|---|---|---|
-| **Input format** | Markdown, HTML | reStructuredText (primary) |
-| **Output format** | DOCX-focused, multi-format | HTML, PDF, ePub, LaTeX |
-| **Setup complexity** | Zero — runs on any Markdown | Requires conf.py, roles, directives |
-| **API integration** | Native Python library | Subprocess or extension hooks |
-| **Diagrams** | 12 renderers included | Via extensions |
-| **Learning curve** | Minimal — standard Markdown | Requires RST expertise |
-
-PiMD is for teams that want to **publish from standard Markdown** without adopting a new markup language or complex build system.
-
-### vs MkDocs
-
-| | PiMD | MkDocs |
-|---|---|---|
-| **Primary output** | DOCX, PDF | HTML websites |
-| **Use case** | Print publishing, reports, books | Technical documentation websites |
-| **Templates** | DOCX-centric templates | HTML themes |
-| **Offline** | Fully offline | Offline |
-| **Plugin system** | 9 plugin types | MkDocs plugins |
-
-MkDocs builds documentation websites; PiMD produces **print-ready documents** from the same Markdown source.
-
-### vs Traditional Markdown Converters
-
-Most Markdown-to-DOCX converters are thin wrappers around `python-docx` with basic formatting. PiMD provides:
-
-- A full **document model** with typed blocks (heading, table, diagram, equation, code, callout, footnote)
-- **Diagram rendering** integrated into the conversion pipeline
-- **Equation rendering** with multiple backends
-- **Template system** with inheritance and configuration
-- **Plugin architecture** with hooks at every pipeline stage
-- **Observability** — metrics, profiling, execution reports
-- **Safety guards** — path traversal protection, input validation, resource limits
 
 ## Key Features
 
-### Markdown Support
+- **Publish-ready DOCX** — professional typography, templates, watermarks, TOC, cross-references
+- **Diagrams** — Mermaid, PlantUML, Graphviz, D2, BlockDiag, Vega, ASCII — powered by [PiDraw](https://pypi.org/project/pidraw/)
+- **Equations** — LaTeX into native Word OMML, MathJax, or SVG
+- **Templates** — 10 presets (academic, business, book, resume, invoice…) with inheritance
+- **Multi-format** — DOCX, EPUB 3.2, LaTeX, PDF/A, HTML, Markdown, TXT
+- **Python API** — first-class library for FastAPI, Flask, Django
+- **Plugin system** — 9 typed plugin types with SDK, hooks, and event bus
+- **Accessibility** — built-in WCAG validation engine
+- **i18n** — full Unicode, RTL (Arabic/Persian/Urdu), CJK, 15+ language configs
+- **Enterprise** — incremental builds, parallel processing, caching (memory/fs/Redis), safety guards
 
-Full CommonMark + GitHub Flavored Markdown: headings, paragraphs, inline formatting, code blocks with syntax highlighting, tables with alignment, task lists, blockquotes, horizontal rules, footnotes, callouts, frontmatter metadata.
+## Installation
 
-### HTML Support
+```bash
+pip install pimd                       # Core only
+pip install "pimd[all]"                # Core + all optional features
+```
 
-Converts HTML documents — inline styles, classes, semantic elements — preserving structure and formatting.
+Optional extras:
 
-### DOCX Generation
-
-Publish-quality DOCX output with professional typography, A4 layout, configurable margins, headers/footers, page numbering, table of contents, cross-references, and automatic numbering.
-
-### Professional Templates
-
-10 built-in template presets with configurable fonts, colors, page sizes, margins, headers, footers, watermarking, and cover pages.
-
-### Diagram Rendering
-
-Mermaid, PlantUML, Graphviz, D2, BlockDiag (seqdiag, actdiag, nwdiag, packetdiag), Vega, BPMN, and ASCII art — all rendered inline in DOCX output.
-
-### Scientific Publishing
-
-Cross-references, bibliography (APA, IEEE, MLA, Chicago, Harvard), equation numbering, figure numbering, table numbering, citing, and native Word equation (OMML) support.
-
-### Asset Management
-
-Remote asset downloads with SHA256 caching, domain allowlisting, offline mode, MIME detection.
-
-### Repository Conversion
-
-Convert MkDocs, Sphinx, Docusaurus, and Obsidian documentation repositories to DOCX.
-
-### Book Publishing
-
-Compile multi-chapter books from configuration files with unified styling, consistent numbering, cross-chapter references, and generated table of contents.
-
-### Batch Processing
-
-Convert entire directories of Markdown/HTML files with parallel processing, progress display, and error reporting.
-
-### Plugin System
-
-9 plugin types (diagram, template, citation, renderer, exporter, asset, validation, parser, publishing) with entry-point discovery, lifecycle hooks, dependency management, and diagnostics.
-
-### Backend Integration
-
-First-class Python API for FastAPI, Flask, Django, and any Python application. In-memory conversion, bytes output, streaming responses.
-
-### CLI Interface
-
-40+ commands: conversion, diagrams, equations, templates, branding, reports, books, citations, merge, batch, validate, project, config, cache, jobs, profile, watch, build, accessibility, and more.
-
-### Enterprise Publishing
-
-Incremental builds, parallel processing, streaming large files, caching with memory/filesystem/Redis backends, safety guards, observability with metrics and profiling, accessibility WCAG validation.
-
-### Multi-Format Export
-
-DOCX, PDF, PDF/A, EPUB, LaTeX, HTML, Markdown, RTF, ODT, TXT — with a consistent public API for all formats.
-
-### Accessibility Validation
-
-Built-in engine checks for WCAG 1.1.1 (alt text), 1.3.1 (table headers), 2.4.10 (heading hierarchy), 4.1.1 (structure), and generates markdown reports with scores.
-
-### Internationalization (i18n)
-
-Full Unicode script detection (LTR, RTL, CJK), Arabic/Persian/Urdu/Hebrew reshaping and bidirectional support, Chinese/Japanese/Korean typography, and language-aware font/line-height configuration across all output formats.
-
-### Collaborative Editing
-
-Revision tracking system with insertions, deletions, replacements, formatting changes, threaded comments, resolution workflow, and review metadata export API.
+| Extra | What it adds |
+|-------|-------------|
+| `[diagrams]` | Pillow — required for diagram rendering |
+| `[equations]` | matplotlib — renders LaTeX equations |
+| `[export]` | PDF export (docx2pdf / weasyprint) |
+| `[citations]` | BibTeX citation support |
+| `[redis]` | Redis cache backend |
+| `[pdfa]` | PDF/A archival format (fpdf2) |
+| `[i18n]` | Arabic reshaping + bidirectional text |
+| `[all]` | Everything above |
 
 ## Quick Start
 
-### Installation
-
-**From source (current — pre-PyPI):**
-
-```bash
-git clone https://github.com/devasishpal/PiMd.git
-cd PiMd
-pip install -e .                    # Core only
-pip install -e ".[all]"             # Core + all optional features
-```
-
-**From PyPI:**
-
-```bash
-pip install pimd                      # Core only (CLI + basic conversion)
-pip install "pimd[all]"               # Core + all runtime features
-pip install "pimd[full]"              # Everything including dev tools
-```
-
-Optional extras can be combined individually:
-
-```bash
-pip install "pimd[diagrams]"       # Diagram rendering (Pillow)
-pip install "pimd[equations]"      # Equation rendering (matplotlib)
-pip install "pimd[export]"         # PDF export
-pip install "pimd[citations]"      # BibTeX support
-pip install "pimd[redis]"          # Redis cache backend
-pip install "pimd[profiling]"      # Performance profiling
-```
-
-All core dependencies (`markdown-it-py`, `mdit-py-plugins`, `python-docx`, `beautifulsoup4`, `lxml`, `typer`, `rich`, `pyyaml`) auto-install with any variant — no manual steps needed.
-
 ### Python API
 
 ```python
@@ -237,1329 +107,94 @@ from pimd import PiMD
 
 engine = PiMD()
 
-# Convert file to file
-engine.md_to_docx("input.md", "output.docx")
+# File to file
+engine.md_to_docx("report.md", "report.docx")
 
-# Convert string to bytes (no filesystem writes)
+# String to bytes (no disk writes)
 docx_bytes = engine.md_text_to_docx_bytes("# Hello World")
 
+# With options
+engine.md_to_docx(
+    "thesis.md", "thesis.docx",
+    generate_toc=True,
+    page_numbers=True,
+    render_diagrams=True,
+)
+```
+
+### CLI
+
+```bash
+# Convert Markdown to DOCX
+pimd md guide.md guide.docx --diagrams
+
+# Convert to EPUB / LaTeX
+pimd epub book.md book.epub
+pimd latex paper.md paper.tex
+
+# Use a template
+pimd md report.md report.docx --template academic
+
+# Batch convert a directory
+pimd batch ./docs --output ./build
+```
+
+## Common Examples
+
+```python
 # Convert HTML to DOCX
 engine.html_to_docx("page.html", "page.docx")
 
-# Convert with options
-engine.md_to_docx(
-    "report.md",
-    "report.docx",
-    generate_toc=True,
-    page_numbers=True,
-    title="Annual Report",
-    author="Jane Smith",
-    render_diagrams=True,       # Render Mermaid/PlantUML/etc. via PiDraw
-)
+# EPUB generation
+engine.convert("novel.md", "epub", "novel.epub")
 
-# Disable diagram rendering
-engine.md_to_docx("plain.md", "plain.docx", render_diagrams=False)
+# PDF/A for archival
+engine.convert("contract.md", "pdfa", "contract.pdf")
+
+# Watch directory for changes (CLI)
+# pimd watch ./docs --output ./build
 ```
 
-### CLI
+## Supported Formats
+
+| Input | Output |
+|-------|--------|
+| Markdown (.md) | DOCX (.docx) |
+| HTML (.html) | EPUB 3.2 (.epub) |
+| — | LaTeX (.tex) |
+| — | PDF / PDF/A (.pdf) |
+| — | HTML (.html) |
+| — | Markdown (.md) |
+| — | TXT (.txt) |
+
+## PiDraw Integration
+
+All diagram rendering is delegated to [PiDraw](https://pypi.org/project/pidraw/). PiMD auto-detects diagram type from code block language hints and renders Mermaid, PlantUML, Graphviz, D2, BlockDiag, Vega, ASCII, and more — all as high-resolution transparent PNGs embedded in DOCX or inline SVG for HTML.
 
 ```bash
-# Convert Markdown to DOCX (with diagrams)
-pimd md guide.md guide.docx --diagrams
+# List supported diagram engines
+pimd diagrams list
 
-# Convert Markdown to DOCX (skip diagrams)
-pimd md guide.md guide.docx --no-render-diagrams
-
-# Convert HTML to DOCX
-pimd html page.html page.docx
-
-# Convert Markdown to EPUB 3.2
-pimd epub book.md book.epub
-
-# Convert Markdown to LaTeX
-pimd latex paper.md paper.tex
-
-# Export to PDF/A archival format
-pimd export pdfa report.md report.pdf
-
-# List available templates
-pimd template list
-
-# Generate a report
-pimd report generate executive
-
-# Detect language script direction
-pimd language input.md
-
-# Track document revisions
-pimd revision init --id doc-1 --title "Report"
-
-# Watch a directory for changes
-pimd watch ./docs --output ./build
-
-# Check version
-pimd --version
+# Test a specific engine
+pimd diagrams test mermaid
 ```
 
-### Backend Server
-
-FastAPI:
-
-```python
-from fastapi import FastAPI, File, UploadFile, Form
-from fastapi.responses import Response
-from pimd import PiMD
-
-app = FastAPI()
-engine = PiMD()
-
-@app.post("/convert")
-async def convert(file: UploadFile = File(...)) -> Response:
-    content = await file.read()
-    docx_bytes = engine.md_text_to_docx_bytes(content.decode())
-    return Response(
-        content=docx_bytes,
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    )
-```
-
-See `examples/fastapi_app.py`, `examples/flask_example.py`, `examples/django_example.py` for complete integration examples.
-
-## Architecture
-
-PiMD follows a layered architecture with clear separation of concerns:
-
-```
-┌─────────────────────────────────────────────────────┐
-│                    CLI Layer                        │
-│   pimd md, pimd html, pimd build, pimd watch ...    │
-├─────────────────────────────────────────────────────┤
-│                   API Layer                         │
-│              PiMD class, convert()                  │
-├─────────────────────────────────────────────────────┤
-│                Service Layer                        │
-│  ConversionService, DocumentService, TemplateService│
-├─────────────────────────────────────────────────────┤
-│               Pipeline Layer                        │
-│     Parse → Transform → Render → Export + Hooks     │
-├─────────────────────────────────────────────────────┤
-│  Parsers  │  Renderers  │  Engines  │  Plugins      │
-│  Markdown │  DOCX       │  Diagram  │  Conversion   │
-│  HTML     │  PDF        │  Equation │  Lifecycle    │
-│           │  HTML       │  Template │  Extension    │
-│           │  TXT        │  Citation │               │
-├─────────────────────────────────────────────────────┤
-│              Domain Model Layer                     │
-│    Document, Block, Span, Heading, Table, Image...  │
-├─────────────────────────────────────────────────────┤
-│           Infrastructure Layer                      │
-│  Cache (memory/fs/redis) │ Safety │ Observability   │
-│  Config │ Incremental │ Parallel │ Streaming        │
-└─────────────────────────────────────────────────────┘
-```
-
-### Parsers
-
-Two built-in parsers convert source text into PiMD's document model:
-
-- **MarkdownParser** — CommonMark + GFM with extensions for frontmatter, footnotes, callouts, diagrams, equations, cross-references
-- **HTMLParser** — HTML to document model via BeautifulSoup with structure preservation
-
-Each parser implements a `parse(text: str) -> Document` interface. Custom parsers can be registered via the plugin system.
-
-### Document Model
-
-The document model (`pimd.models`) is a typed hierarchy of block-level elements:
-
-```
-Document
-├── Heading (level, text, id)
-├── Paragraph (spans with bold/italic/code/links/images)
-├── CodeBlock (language, code)
-├── Table (headers, rows, alignment)
-├── OrderedList / BulletList (items with nested children)
-├── Image (url, alt, width, height)
-├── Diagram (language, source, svg_bytes, png_bytes, title, figure_number)
-├── EquationBlock (latex, omml, svg)
-├── HorizontalRule
-├── Callout (type, title, blocks)
-├── Footnote (ref_id, text)
-└── Blockquote (blocks)
-```
-
-This model is the single source of truth that flows through the pipeline. Every renderer, plugin, and transformation operates on it.
-
-### Renderers
-
-- **DOCX Renderer** (primary) — produces publish-quality DOCX via `python-docx` with full styling, TOC, headers/footers, watermarks
-- **HTML Renderer** — generates HTML output
-- **PDF** — via DOCX-to-PDF conversion (weasyprint on Linux/Mac, docx2pdf on Windows)
-- **EPUB, LaTeX, PPTX** — stub architecture for future releases
-
-### Publishing Engine
-
-The publishing layer orchestrates multi-part documents:
-
-- **Book Compiler** — compiles chapters from config, applies consistent templates, generates TOC
-- **Report Engine** — generates structured reports from templates (executive, technical, research, compliance, architecture, etc.)
-- **Template Engine** — manages template presets, inheritance chains, config merging
-
-### Diagram Engine
-
-Diagram rendering is fully integrated into the conversion pipeline. PiMD delegates all diagram rendering to [PiDraw](https://pypi.org/project/pidraw/) — the official diagram rendering runtime. Code blocks with recognized language hints are automatically detected and rendered:
-
-- Language detection via PiDraw's content-based auto-detector
-- Supported languages queried from PiDraw at runtime (no hardcoded lists)
-- SHA-256 content caching with configurable in-memory cache
-- Parallel rendering with configurable worker count
-- Plugin architecture for custom renderers via the SDK
-- Graceful error handling — rendering failures produce styled warning blocks
-
-### Equation Engine
-
-Equations are rendered inline and display-mode from LaTeX syntax:
-
-- Detects `$...$` and `$$...$$` in Markdown and HTML
-- Multiple rendering backends (matplotlib, MathJax-based)
-- Native Word OMML output for perfect DOCX rendering
-- Equation numbering and cross-references
-- Chemical formula support
-- Caching with configurable TTL
-
-### Template Engine
-
-Templates control the visual output of documents:
-
-- **10 presets** — professional, academic, technical, business, book, proposal, invoice, resume, manual, API
-- **Inheritance** — templates can extend parent templates with overrides
-- **Config** — page size, margins, fonts, colors, headers, footers, TOC, cover pages, watermarks
-- **Validation** — built-in template validation
-- **Custom** — create new templates with JSON configuration
-
-### Plugin System
-
-The plugin system (`pimd.plugins`) provides hooks at every stage of the conversion pipeline:
-
-- **Conversion hooks**: `BEFORE_PARSE`, `AFTER_PARSE`, `BEFORE_RENDER`, `AFTER_RENDER`, `BEFORE_CONVERT`, `AFTER_CONVERT`
-- **Plugin types**: diagram, template, citation, renderer, exporter, asset, validation, parser, publishing
-- **SDK**: `pimd.sdk` provides `BasePlugin` with typed subclasses for each plugin type
-- **Discovery**: plugins can be discovered via entry points (`pimd.plugins` group) or filesystem
-- **Lifecycle**: `on_install`, `on_uninstall`, `on_enable`, `on_disable` hooks
-- **Dependencies**: plugins can declare dependencies on other plugins
-
-### Service Layer
-
-`ConversionService` orchestrates the full pipeline with:
-
-- Input validation (safety checks, file size, nesting depth)
-- Cache lookups (memory/filesystem/Redis)
-- Plugin hook dispatch at every stage
-- Diagram and equation processing
-- Statistics collection
-- Metrics and observability (parse time, render time, total time, block counts)
-- Error handling with graceful degradation
-
-## Feature Showcase
-
-### Markdown → DOCX
-
-`sample.md`:
-```markdown
-# PiMD Sample Document
-
-This is a sample Markdown file used for testing PiMD conversion.
-
-## Features
-
-- Paragraphs with **bold** and *italic* text
-- [Links](https://example.com)
-- Lists (ordered and unordered)
-- Code blocks
-```
-
-```bash
-pimd md sample.md output.docx
-```
-
-### HTML → DOCX
-
-`sample.html`:
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head><title>PiMD Sample Document</title></head>
-<body>
-    <h1>PiMD Sample Document</h1>
-    <p>This is a sample HTML file used for testing PiMD conversion.</p>
-</body>
-</html>
-```
-
-```bash
-pimd html sample.html output.docx
-```
-
-### Diagrams (Powered by PiDraw)
-
-```markdown
-## Architecture Overview
-
-```mermaid title="Load Balancer Architecture"
-graph TD
-    A[Client] --> B[Load Balancer]
-    B --> C[Server 1]
-    B --> D[Server 2]
-```
-```
-
-PiMD delegates rendering to PiDraw, producing transparent 300 DPI PNGs for DOCX and inline SVG for HTML. The `title` attribute generates automatic figure captions (`Figure 1: Load Balancer Architecture`).
-
-### Equations
-
-```markdown
-The quadratic formula:
-
-$$ x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a} $$
-
-Inline equation: $E = mc^2$
-```
-
-Equations are rendered as native Word OMML or SVG depending on the backend.
-
-### Templates
-
-```bash
-# List available templates
-pimd template list
-
-# Convert with a specific template
-pimd md report.md report.docx --template academic
-
-# Get template details
-pimd template info academic
-```
-
-### Books
-
-```bash
-pimd book compile book-config.json output.docx
-```
-
-Where `book-config.json` defines chapters, styling, and metadata.
-
-### Reports
-
-```bash
-# List available report types
-pimd report list-types
-
-# Generate a report
-pimd report generate executive --title "Q4 Review" --output report.docx
-```
-
-### Repository Conversion
-
-```bash
-# Convert an MkDocs project
-pimd repo ./docs --output documentation.docx
-
-# Convert with frontmatter handling
-pimd frontmatter extract ./post.md
-```
-
-## EPUB Output
-
-PiMD includes a complete **EPUB 3.2 renderer** that produces valid EPUB packages from the document model.
-
-### Features
-
-- **EPUB 3.2 compliance** — valid OPF, NCX, nav.xhtml, XHTML content, CSS
-- **Reflowable layout** — single-column, device-agnostic reading experience
-- **Table of Contents** — auto-generated from heading hierarchy (NCX + nav)
-- **Cover page** — configurable cover with title, author, and image
-- **Chapters** — automatic chapter splitting from h1/h2 headings
-- **Embedded assets** — images, diagrams, and equations embedded inline
-- **Custom CSS** — configure typography, colors, and layout
-- **Validation** — built-in `validate_epub()` checks package structure and well-formedness
-
-### CLI Usage
-
-```bash
-# Convert Markdown to EPUB
-pimd epub guide.md guide.epub
-
-# With metadata and custom CSS
-pimd epub report.md report.epub --title "Annual Report" --author "Jane Smith" --css custom.css
-
-# Validate after generation
-pimd epub book.md book.epub --validate
-```
-
-### Python API
-
-```python
-from pimd import PiMD
-from pimd.export.formats.epub import EpubRenderer
-from pimd.converters.markdown import MarkdownConverter
-
-engine = PiMD()
-engine.convert("input.md", "epub", "output.epub")
-
-# Or use the renderer directly
-converter = MarkdownConverter()
-doc = converter.parse_text(open("input.md").read())
-renderer = EpubRenderer()
-renderer.render(doc, "output.epub", title="My Book", author="Jane Smith")
-```
-
-## LaTeX Output
-
-PiMD generates **clean, readable LaTeX** suitable for compilation with pdflatex, xelatex, or lualatex.
-
-### Features
-
-- **Document classes** — article, report, book with appropriate structure
-- **Headings** — section, subsection, subsubsection, paragraph
-- **Tables** — tabular environment with booktabs styling
-- **Code blocks** — listings package with language-specific formatting
-- **Math expressions** — inline `$...$` and display `equation*`/`equation`
-- **Images** — graphicx with figure environment and captions
-- **Hyperlinks** — hyperref with link colors
-- **Citations** — biblatex with APA style preamble
-- **Cross-references** — label/ref support in generated output
-
-### CLI Usage
-
-```bash
-# Convert Markdown to LaTeX
-pimd latex paper.md paper.tex
-
-# With document class and TOC
-pimd latex thesis.md thesis.tex --class book --toc --title "My Thesis" --author "John Doe"
-```
-
-### Python API
-
-```python
-from pimd import PiMD
-from pimd.export.formats.latex import LatexRenderer
-
-engine = PiMD()
-engine.convert("input.md", "latex", "output.tex")
-
-# Or use the renderer directly
-renderer = LatexRenderer()
-renderer.render(document, "output.tex", title="Paper", document_class="article")
-```
-
-## PDF/A Output
-
-PiMD supports **archival PDF/A generation** for long-term document preservation.
-
-### Features
-
-- **PDF/A-1b** and **PDF/A-2b** conformance levels
-- **Font embedding** — automatic font embedding for faithful rendering
-- **Metadata preservation** — title, author, subject carried through
-- **Automatic fallback** — LibreOffice PDF/A filter → fpdf2 → standard PDF
-- **Standards-compliant** — ISO 19005 archival format
-
-### CLI Usage
-
-```bash
-# Export to PDF/A
-pimd export pdfa report.md output.pdf
-
-# Specify conformance level
-pimd export pdfa archive.md archive.pdf --level 1b
-```
-
-### Python API
-
-```python
-from pimd import PiMD
-from pimd.export.pdf import convert_to_pdfa
-
-engine = PiMD()
-engine.convert("input.md", "pdfa", "output.pdf")
-```
-
-### PDF/A Doctor
-
-```bash
-pimd export doctor
-```
-
-## Internationalization (i18n)
-
-PiMD provides comprehensive internationalization support across all output formats.
-
-### Script Detection
-
-Automatic detection of text direction and script type:
-
-| Script | Direction | Languages |
-|---|---|---|
-| **LTR** | Left-to-right | English, French, German, Spanish, etc. |
-| **RTL** | Right-to-left | Arabic (ar), Persian/Farsi (fa), Urdu (ur), Hebrew (he) |
-| **CJK** | Mixed | Chinese (zh), Japanese (ja), Korean (ko) |
-
-### Features
-
-- **Unicode script detection** — `detect_script()` classifies text as LTR, RTL, CJK, or neutral
-- **Language-aware typography** — `get_language_config()` provides font, size, line height for 15+ languages
-- **Arabic reshaping** — `reshape_arabic()` uses `arabic_reshaper` for proper Arabic glyph rendering
-- **Bidirectional text** — `apply_bidi()` uses `bidi` algorithm for mixed LTR/RTL text
-- **DOCX i18n** — `configure_docx_for_language()` sets document direction, fonts, and RTL properties
-- **EPUB i18n** — `configure_epub_for_language()` generates language-specific CSS with direction and font-family
-- **LaTeX i18n** — `configure_latex_for_language()` adds babel, ctex, or luatexja packages
-
-### CLI Usage
-
-```bash
-# Detect script direction of a document
-pimd language input.md
-```
-
-### Python API
-
-```python
-from pimd.i18n import (
-    detect_script, ScriptType,
-    is_rtl_language, is_cjk_language,
-    get_language_config, process_text_for_language,
-)
-
-script = detect_script("مرحبا بالعالم")  # ScriptType.RTL
-is_rtl = is_rtl_language("ar")            # True
-config = get_language_config("zh-CN")     # CJK config with appropriate font
-text = process_text_for_language("Arabic text", "ar")
-```
-
-### RTL Support by Output Format
-
-| Format | RTL Support |
-|---|---|
-| **DOCX** | Direction set via `w:bidi` on sections and paragraphs |
-| **EPUB** | `direction: rtl` + `unicode-bidi: embed` in CSS |
-| **LaTeX** | `babel` package with arabic/hebrew language support |
-| **PDF/A** | Font embedding preserves Unicode glyphs |
-
-## Collaborative Editing
-
-PiMD provides a **document revision model** for tracking changes, comments, and annotations — enabling future collaborative workflows.
-
-### Revision Model
-
-The `RevisionTracker` manages all tracked changes:
-
-- **Insertions** — new text added at a position
-- **Deletions** — text removed from a position
-- **Replacements** — text swapped for new content
-- **Formatting changes** — style modifications
-
-### Comment System
-
-Comments support threading, resolution workflow, and full metadata:
-
-- **Threaded replies** — parent/child comment relationships
-- **Resolution tracking** — mark comments resolved with attribution
-- **Position annotations** — comment on specific text ranges
-
-### Review Metadata
-
-- **Reviewers** — list of assigned reviewers
-- **Status tracking** — draft, in_review, approved, rejected
-- **Timestamps** — creation, updates, resolution dates
-
-### CLI Usage
-
-```bash
-# Initialize a revision tracker
-pimd revision init --id doc-123 --title "Annual Report"
-
-# Add a tracked revision
-pimd revision add insertion --author "alice" --desc "Added executive summary"
-
-# List tracked revisions
-pimd revision list
-
-# Filter by status
-pimd revision list --status pending
-```
-
-### Python API
-
-```python
-from pimd.revisions import RevisionTracker, RevisionType, RevisionStatus
-
-tracker = RevisionTracker(document_id="doc-123", title="Report")
-
-# Add revisions
-tracker.add_revision(
-    revision_type=RevisionType.INSERTION,
-    author="alice",
-    start_pos=42,
-    end_pos=42,
-    new_text="New content here",
-    description="Added paragraph",
-)
-
-# Add comments
-tracker.add_comment(
-    author="bob",
-    text="Please review this section",
-    start_pos=10,
-    end_pos=200,
-)
-
-# Export review summary
-summary = tracker.export_review_summary()
-print(f"Revisions: {summary['revisions']['total']}")
-print(f"Comments: {summary['comments']['total']}")
-```
-
-## DOCX Quality
-
-PiMD produces publication-quality DOCX output:
-
-| Feature | Description |
-|---|---|
-| **Layout** | A4 (default), Letter, or custom page size |
-| **Margins** | Normal (2.54 cm), Narrow (1.27 cm), or custom |
-| **Typography** | Professional fonts (Calibri default), configurable heading/body fonts |
-| **Font sizes** | Configurable per heading level and body text |
-| **Line spacing** | Configurable (default 1.15) |
-| **Paragraph spacing** | Configurable (default 6 pt after) |
-| **Headers** | Configurable header text per section |
-| **Footers** | Configurable footer text, page numbering |
-| **Table of Contents** | Auto-generated from heading hierarchy |
-| **Cross-references** | Heading references, figure references, table references |
-| **Numbering** | Heading numbering, figure numbering, table numbering, equation numbering |
-| **Citations** | APA, IEEE, MLA, Chicago, Harvard with full bibliography |
-| **Cover pages** | Configurable cover page with title, author, date |
-| **Watermarks** | Configurable text watermarking |
-| **Images** | Embedded with alt text, sizing, positioning |
-| **Diagrams** | High-resolution embedded PNG/SVG |
-| **Equations** | Native Word OMML for perfect rendering |
-| **Tables** | Formatted with headers, borders, alignment |
-| **Code blocks** | Monospace font, syntax-highlighted (via formatting) |
-| **Hyperlinks** | Clickable links preserved |
-| **Accessibility** | Alt text, heading hierarchy, table headers |
-
-## Diagram Support
-
-PiMD delegates all diagram rendering to [PiDraw](https://pypi.org/project/pidraw/) — a universal diagram rendering runtime that supports every major diagram engine. PiMD never hardcodes diagram language lists; supported languages are queried from PiDraw at runtime.
-
-| Engine | Language hints | DOCX | HTML |
-|---|---|---|---|
-| [Mermaid](https://mermaid.js.org/) | `mermaid` | Transparent PNG | Inline SVG |
-| [PlantUML](https://plantuml.com/) | `plantuml`, `puml` | Transparent PNG | Inline SVG |
-| [Graphviz](https://graphviz.org/) | `dot`, `graphviz` | Transparent PNG | Inline SVG |
-| [D2](https://d2lang.com/) | `d2` | Transparent PNG | Inline SVG |
-| [BlockDiag](http://blockdiag.com/) | `blockdiag` | Transparent PNG | Inline SVG |
-| [SeqDiag](http://blockdiag.com/seqdiag/) | `seqdiag` | Transparent PNG | Inline SVG |
-| [ActDiag](http://blockdiag.com/actdiag/) | `actdiag` | Transparent PNG | Inline SVG |
-| [NwDiag](http://blockdiag.com/nwdiag/) | `nwdiag` | Transparent PNG | Inline SVG |
-| [PacketDiag](http://blockdiag.com/packetdiag/) | `packetdiag` | Transparent PNG | Inline SVG |
-| [Vega](https://vega.github.io/) | `vega` | Transparent PNG | Inline SVG |
-| [BPMN](https://en.wikipedia.org/wiki/Business_Process_Model_and_Notation) | `bpmn` | Transparent PNG | Inline SVG |
-| ASCII Art | `ascii` | Transparent PNG | Inline SVG |
-
-Run `pimd diagrams list` to see all languages PiDraw supports on your system.
-
-### SVG-First Pipeline
-
-All diagrams are rendered to SVG first, then converted to transparent PNG at ≥300 DPI for DOCX embedding. HTML output gets inline SVG for full vector quality. This ensures vector-perfect diagrams in both formats.
-
-### Figure Captions & Numbering
-
-Add a `title` attribute to your diagram fence for automatic figure captions:
-
-```markdown
-```mermaid title="System Architecture"
-graph TD
-    A[Client] --> B[Server]
-```
-````
-
-Captions are rendered as `Figure 1: System Architecture` centered below the diagram, with automatic numbering across the document.
-
-### CLI Flags
-
-Control diagram rendering via the `--render-diagrams` / `--diagrams` flags on `pimd md` and `pimd html` commands:
-
-```bash
-pimd md report.md report.docx --diagrams        # Enable diagram rendering (default)
-pimd md report.md report.docx --no-render-diagrams  # Skip diagram rendering
-```
-
-### Architecture
-
-```
-CodeBlock (language="mermaid")
-    │
-    ▼
-MarkdownParser → Diagram model (detected at parse time via PiDraw)
-    │
-    ▼
-ConversionService._process_diagrams()
-    │
-    ├─ PiDraw integration layer
-    │   ├─ SHA-256 cache lookup
-    │   ├─ SVG rendering via PiDraw
-    │   ├─ SVG → Transparent PNG (cairosvg, ≥300 DPI)
-    │   └─ Cache result
-    │
-    ▼
-DOCX Renderer: embed PNG + figure caption
-HTML Renderer: embed inline SVG + figcaption
-```
-
-### Diagnose & Test
-
-```bash
-pimd diagrams list          # List all supported languages
-pimd diagrams test mermaid  # Test a specific renderer
-pimd diagrams doctor        # Full system diagnostics
-pimd diagrams cache-clear   # Clear the in-memory cache
-```
-
-## Scientific Publishing
-
-PiMD provides comprehensive support for scientific and technical document publishing.
-
-### Equation Rendering
-
-```markdown
-The Fourier transform is defined as:
-
-$$ \hat{f}(\omega) = \int_{-\infty}^{\infty} f(t) e^{-i\omega t} \, dt $$
-
-Where $f(t)$ is a continuous function and $\omega$ is angular frequency.
-```
-
-- **LaTeX syntax** — standard `$...$` inline and `$$...$$` display
-- **Multiple backends** — Content MathML, matplotlib rendering, LaTeX-based
-- **Native OMML** — equations are converted to native Word OMML for perfect inline rendering with Word's equation engine
-- **SVG fallback** — when OMML conversion is unavailable, equations are rendered as SVG images
-- **Equation numbering** — automatic `(1)`, `(2)` numbering with `\label{eq:foo}` and `\ref{eq:foo}` cross-references
-- **Chemical formulas** — support for chemical notation via `\ce{}` syntax (mhchem-compatible)
-
-### Bibliography
-
-```python
-from pimd import CitationEngine, CitationStyle
-
-engine = CitationEngine()
-engine.load_bibtex("references.bib")
-citations = engine.cite("Einstein1915", style=CitationStyle.APA)
-bibliography = engine.bibliography(style=CitationStyle.IEEE)
-```
-
-Supported citation styles:
-
-- **APA** (American Psychological Association)
-- **IEEE** (Institute of Electrical and Electronics Engineers)
-- **MLA** (Modern Language Association)
-- **Chicago** (Chicago Manual of Style)
-- **Harvard** (Harvard referencing)
-
-### Cross-References
-
-```markdown
-As shown in @fig:architecture, the system...
-
-See @tbl:results for experimental data.
-
-Equation @eq:fourier describes the transform.
-```
-
-Cross-references to figures, tables, equations, and headings are resolved during rendering and converted to Word cross-reference fields.
-
-## Templates
-
-PiMD includes 10 professionally designed template presets:
-
-| Template | Best for | Config highlights |
-|---|---|---|
-| **Professional** | General business documents | A4, Calibri, 11pt, TOC optional |
-| **Academic** | Research papers, theses | A4, Times New Roman, 12pt, TOC, line numbers |
-| **Technical** | Manuals, specifications | A4, Calibri, 10pt, TOC, page numbers |
-| **Business** | Proposals, reports | A4, Calibri, 11pt, TOC, cover page |
-| **Book** | Full-length publications | A4, Calibri, 11pt, TOC, chapters, headers |
-| **Proposal** | Business proposals | A4, Calibri, 11pt, cover page, TOC |
-| **Invoice** | Billing documents | A4, Calibri, 10pt, header/footer |
-| **Resume** | CVs and resumes | A4, Calibri, 10pt, compact margins |
-| **Manual** | Product documentation | A4, Calibri, 10pt, TOC, numbered headings |
-| **API** | API documentation | A4, Calibri, 10pt, TOC, code blocks |
-
-### Template Inheritance
-
-Templates support inheritance chains. A child template can override specific settings while inheriting the rest from its parent:
-
-```json
-{
-    "metadata": {
-        "name": "my_academic",
-        "tags": ["base_academic"]
-    },
-    "config": {
-        "default_font": "Georgia",
-        "line_spacing": 1.5
-    }
-}
-```
-
-### Custom Templates
-
-Create a template directory with a `template.json`:
-
-```json
-{
-    "metadata": {
-        "name": "custom",
-        "type": "custom",
-        "version": "2.2.0",
-        "author": "Your Name",
-        "description": "My custom template"
-    },
-    "config": {
-        "page_size": "A4",
-        "default_font": "Calibri",
-        "default_font_size": 11,
-        "generate_toc": true,
-        "cover_page": true
-    }
-}
-```
-
-Templates are discovered from `~/.pimd/templates/` and project-local `templates/` directories.
-
-## Plugin Ecosystem
-
-PiMD has a first-class plugin system designed for extensibility.
-
-### Plugin Types
-
-| Type | Base Class | Purpose |
-|---|---|---|
-| Diagram | `DiagramPlugin` | Custom diagram renderers |
-| Template | `TemplatePlugin` | Custom template loaders, transformations |
-| Citation | `CitationPlugin` | Custom citation styles, bibliography formats |
-| Renderer | `RendererPlugin` | Custom output renderers (e.g., EPUB, LaTeX) |
-| Exporter | `ExporterPlugin` | Custom export formats |
-| Asset | `AssetPlugin` | Custom asset handlers (images, fonts, etc.) |
-| Validation | `ValidationPlugin` | Custom validation rules |
-| Parser | `ParserPlugin` | Custom input parsers |
-| Publishing | `PublishingPlugin` | Custom publishing pipelines |
-
-### Plugin Lifecycle
-
-```
-Install → Register → Enable → Dispatch → Disable → Uninstall
-```
-
-Each plugin receives hook calls at every lifecycle stage.
-
-### Discovery
-
-Plugins can be discovered via:
-
-1. **Entry points** — `pimd.plugins` group in `pyproject.toml`:
-
-```toml
-[project.entry-points."pimd.plugins"]
-my_plugin = "my_package.plugin:MyPlugin"
-```
-
-2. **Filesystem** — Python files in `~/.pimd/plugins/` or project-local `plugins/` directory
-
-3. **Programmatic** — `PluginManager.register()`
-
-### SDK
-
-The Extension SDK (`pimd.sdk`) provides:
-
-- **Base classes** — `BasePlugin` with typed subclasses for each plugin type
-- **Pre-defined hooks** — methods that correspond to pipeline stages
-- **Lifecycle hooks** — `on_install`, `on_uninstall`, `on_enable`, `on_disable`
-- **Event system** — `Event`, `EventBus` for decoupled plugin communication
-- **Hook registry** — `HookRegistry` for managing lifecycle hooks
-
-### CLI
-
-```bash
-# List installed plugins
-pimd plugin list
-
-# Install a plugin
-pimd plugin install my-plugin
-
-# Enable/disable
-pimd plugin enable my-plugin
-pimd plugin disable my-plugin
-
-# Run diagnostics
-pimd plugin doctor
-```
-
-## Backend Integration
-
-PiMD's library-first design makes it straightforward to integrate into web frameworks.
-
-### FastAPI
-
-```python
-from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import Response
-from pimd import PiMD
-
-app = FastAPI()
-engine = PiMD()
-
-@app.post("/markdown")
-async def convert_markdown(file: UploadFile = File(...)) -> Response:
-    content = await file.read()
-    docx_bytes = engine.md_text_to_docx_bytes(content.decode("utf-8"))
-    return Response(
-        content=docx_bytes,
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={
-            "Content-Disposition": f'attachment; filename="output.docx"'
-        },
-    )
-```
-
-See `examples/fastapi_app.py` for a complete example with streaming and form-encoded endpoints.
-
-### Flask
-
-```python
-from flask import Flask, Response, request
-from pimd import PiMD
-
-app = Flask(__name__)
-engine = PiMD()
-
-@app.route("/markdown", methods=["POST"])
-def convert_markdown():
-    text = request.form.get("text", "")
-    docx_bytes = engine.md_text_to_docx_bytes(text)
-    return Response(
-        docx_bytes,
-        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": "attachment; filename=output.docx"},
-    )
-```
-
-See `examples/flask_example.py` for a complete example.
-
-### Django
-
-```python
-from django.http import HttpRequest, HttpResponse
-from pimd import PiMD
-
-engine = PiMD()
-
-def convert_markdown(request: HttpRequest) -> HttpResponse:
-    text = request.POST.get("text", "")
-    docx_bytes = engine.md_text_to_docx_bytes(text)
-    return HttpResponse(
-        docx_bytes,
-        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": 'attachment; filename="output.docx"'},
-    )
-```
-
-See `examples/django_example.py` for a complete example.
-
-### In-Memory Conversion
-
-```python
-from pimd import PiMD
-
-engine = PiMD()
-
-# Convert text to bytes — no filesystem writes
-docx_bytes = engine.md_text_to_docx_bytes("# Hello World")
-
-# Convert HTML text to bytes
-docx_bytes = engine.html_text_to_docx_bytes("<h1>Hello</h1>")
-```
-
-## CLI Reference
-
-### Conversion Commands
-
-| Command | Description |
-|---|---|
-| `pimd md <input> <output>` | Convert Markdown → DOCX |
-| `pimd html <input> <output>` | Convert HTML → DOCX |
-| `pimd epub <input> <output>` | Convert Markdown → EPUB 3.2 |
-| `pimd latex <input> <output>` | Convert Markdown → LaTeX |
-| `pimd export docx <input> <output>` | Export to DOCX |
-| `pimd export pdf <input> <output>` | Export to PDF |
-| `pimd export pdfa <input> <output>` | Export to PDF/A archival format |
-| `pimd export epub <input> <output>` | Export to EPUB via unified system |
-| `pimd export latex <input> <output>` | Export to LaTeX via unified system |
-| `pimd export html <input> <output>` | Export to HTML |
-| `pimd batch <input> <output>` | Batch convert directory |
-| `pimd watch <dir>` | Watch directory for changes |
-| `pimd build <config>` | Build multi-file project |
-
-### Diagram Commands
-
-| Command | Description |
-|---|---|
-| `pimd diagrams list` | List available renderers |
-| `pimd diagrams test <lang>` | Test a renderer |
-| `pimd diagrams cache-clear` | Clear diagram cache |
-| `pimd diagrams doctor` | Diagnose diagram tools |
-
-### Equation Commands
-
-| Command | Description |
-|---|---|
-| `pimd equations list` | List equation formats |
-| `pimd equations test <latex>` | Test equation rendering |
-
-### Template Commands
-
-| Command | Description |
-|---|---|
-| `pimd template list` | List templates |
-| `pimd template info <name>` | Show template details |
-| `pimd template validate <name>` | Validate template |
-
-### Plugin Commands
-
-| Command | Description |
-|---|---|
-| `pimd plugin list` | List installed plugins |
-| `pimd plugin install <name>` | Install a plugin |
-| `pimd plugin enable <name>` | Enable a plugin |
-| `pimd plugin disable <name>` | Disable a plugin |
-| `pimd plugin doctor` | Run plugin diagnostics |
-
-### Report Commands
-
-| Command | Description |
-|---|---|
-| `pimd report generate <type>` | Generate a report |
-| `pimd report list-types` | List report types |
-
-### Config Commands
-
-| Command | Description |
-|---|---|
-| `pimd config show` | Show resolved configuration |
-| `pimd config path` | Show config file locations |
-| `pimd config init` | Generate default config file |
-| `pimd config validate` | Validate configuration |
-
-### Cache Commands
-
-| Command | Description |
-|---|---|
-| `pimd cache clear` | Clear all caches |
-| `pimd cache status` | Show cache backend status |
-| `pimd cache info` | Show cache diagnostics |
-
-### Book Commands
-
-| Command | Description |
-|---|---|
-| `pimd book compile <config> <output>` | Compile a book |
-
-### Citation Commands
-
-| Command | Description |
-|---|---|
-| `pimd citations load <bibtex>` | Load BibTeX file |
-| `pimd citations bibliography` | Generate bibliography |
-
-### Diagnostics
-
-| Command | Description |
-|---|---|
-| `pimd --version` | Show version |
-| `pimd version` | Show detailed version + system info |
-| `pimd info` | Show system information |
-| `pimd doctor` | Run system diagnostics |
-| `pimd flavor <file>` | Detect Markdown flavor |
-| `pimd profile run <input>` | Profile a conversion |
-
-### Other Commands
-
-| Command | Description |
-|---|---|
-| `pimd merge <files> <output>` | Merge multiple documents |
-| `pimd validate <input>` | Validate a document |
-| `pimd frontmatter extract <input>` | Extract frontmatter |
-| `pimd frontmatter strip <input>` | Strip frontmatter |
-| `pimd analyze <input>` | Analyze document structure |
-| `pimd repo <input> <output>` | Convert documentation repo |
-| `pimd language <input>` | Detect script direction (LTR/RTL/CJK) |
-| `pimd accessibility check <input>` | Check accessibility |
-| `pimd accessibility report <input> <output>` | Generate accessibility report |
-| `pimd revision init` | Initialize revision tracker |
-| `pimd revision add <type>` | Add a tracked revision |
-| `pimd revision list` | List tracked revisions |
-
-## Configuration
-
-PiMD supports three levels of configuration with priority resolution:
-
-```
-Runtime options (highest priority)
-    ↓
-Project config (.pimdconfig)
-    ↓
-Global config (~/.pimd/config.toml)
-    ↓
-Built-in defaults (lowest priority)
-```
-
-### Global Configuration
-
-`~/.pimd/config.toml`:
-
-```toml
-[defaults]
-theme = "professional"
-author = "Your Name"
-company = "Your Company"
-language = "en-US"
-page_size = "A4"
-default_font = "Calibri"
-
-[conversion]
-generate_toc = true
-page_numbers = true
-continue_on_error = true
-
-[cache]
-enabled = true
-backend = "memory"  # memory, filesystem, redis
-
-[security]
-max_input_size_mb = 100
-max_nesting_depth = 100
-```
-
-### Project Configuration
-
-`.pimdconfig` in the project root directory — follows the same format as global config but overrides it.
-
-### Environment Variables
-
-All configuration keys can be set via environment variables with the `PIMD_` prefix:
-
-```bash
-export PIMD_DEFAULTS_THEME=academic
-export PIMD_CONVERSION_GENERATE_TOC=true
-export PIMD_CACHE_BACKEND=filesystem
-export PIMD_SECURITY_MAX_INPUT_SIZE_MB=500
-```
-
-Environment variables have the highest priority, overriding all other configuration sources.
-
-### CLI Configuration
-
-```bash
-# Show resolved configuration
-pimd config show
-
-# Generate a default config file
-pimd config init
-
-# Validate configuration
-pimd config validate
-
-# Show config file locations
-pimd config path
-```
-
-## Performance
-
-### Caching
-
-PiMD has a unified caching architecture with three backends:
-
-| Backend | Storage | TTL | Best for |
-|---|---|---|---|
-| **Memory** | In-process dict | Configurable | Single-server deployments |
-| **Filesystem** | SHA256-keyed files | Configurable | Large caches, persistent across restarts |
-| **Redis** | Remote key-value store | Configurable | Distributed deployments |
-
-```python
-from pimd import PiMD
-from pimd.caching import MemoryCache, FileSystemCache
-
-# In-memory cache (default)
-engine = PiMD(cache=MemoryCache(default_ttl=300))
-
-# Filesystem cache
-engine = PiMD(cache=FileSystemCache(cache_dir="./.cache"))
-```
-
-Cache keys are content-addressable (SHA256 of input + options), so identical conversions reuse cached results automatically.
-
-### Parallel Processing
-
-PiMD supports parallel processing for batch conversions and diagram rendering:
-
-```python
-from pimd.parallel import ThreadExecutor, ProcessExecutor
-
-# Thread-based parallel execution
-with ThreadExecutor(max_workers=4) as executor:
-    results = executor.map(convert_file, files)
-
-# Process-based parallel execution
-with ProcessExecutor(max_workers=4) as executor:
-    results = executor.map(convert_file, files)
-```
-
-### Large Document Support
-
-- **Streaming** — `StreamingMarkdownReader` processes files in chunks without loading the entire file into memory
-- **Large files** — SafetyGuard imposes configurable limits (default 100 MB input, 500 MB file)
-- **Incremental builds** — `IncrementalBuildTracker` uses content hashing to skip unchanged files
-
-### Repository Conversion
-
-For large documentation repositories, PiMD provides:
-
-- **Tree walking** — recursive discovery of all Markdown/HTML files
-- **Parallel processing** — files are converted concurrently
-- **Incremental builds** — only changed files are reconverted
-- **Watch mode** — `pimd watch` rebuilds on file changes
-
-## Project Structure
-
-```
-pimd/
-├── src/
-│   └── pimd/
-│       ├── __init__.py          # Public API (158 symbols)
-│       ├── __main__.py          # python -m pimd entry point
-│       ├── models.py            # Document model
-│       ├── exceptions.py        # Exception hierarchy
-│       ├── recovery.py          # Graceful failure recovery
-│       ├── api/                 # PiMD public API class
-│       ├── cli/                 # Typer CLI (40+ commands)
-│       ├── parsers/             # Markdown and HTML parsers
-│       ├── renderers/           # DOCX and HTML renderers
-│       ├── converters/          # Convenience converters
-│       ├── services/            # Orchestration service
-│       ├── pipeline/            # Pipeline stages
-│       ├── diagrams/            # Universal diagram engine (PiDraw-powered)
-│       │   ├── pidraw_integration.py  # PiDraw adapter (single source of truth)
-│       │   ├── engine.py         # DiagramEngine — delegates to PiDraw
-│       │   ├── models.py         # DiagramResult, DiagramConfig — languages from PiDraw
-│       │   ├── registry.py       # PiDraw-backed registry + plugin support
-│       │   ├── cache.py          # Memory/FileSystem cache backends
-│       │   └── renderers/        # Legacy individual renderers (backward compat)
-│       ├── equations/           # Equation engine
-│       ├── templates/           # Template engine + 10 presets
-│       ├── plugins/             # Plugin system
-│       ├── sdk/                 # Extension SDK
-│       ├── cache/               # Cache framework
-│       ├── config/              # Configuration system
-│       ├── observability/       # Metrics, profiling, reports
-│       ├── safety/              # Security guards
-│       ├── branding/            # Branding manager
-│       ├── reports/             # Report engine
-│       ├── books/               # Book compiler
-│       ├── citations/           # Citation engine (5 styles)
-│       ├── references/          # Cross-reference system
-│       ├── accessibility/       # WCAG validation engine
-│       ├── remote_assets/       # Remote asset management
-│       ├── blocks/              # Content block library
-│       ├── streaming/           # Large file streaming
-│       ├── incremental/         # Incremental build tracker
-│       ├── parallel/            # Parallel execution
-│               ├── export/              # Export engine (EPUB, LaTeX, PDF/A, DOCX, PDF, HTML)
-│       ├── batch/               # Batch processing
-│       ├── project/             # Project converter
-│       ├── compatibility/       # Ecosystem compatibility
-│       ├── frontmatter/         # Frontmatter parsing
-│       ├── callouts/            # Callout blocks
-        │   ├── footnotes/           # Footnotes
-        │   ├── attachments/         # Document attachments
-        │   ├── profiles/            # Export profiles
-        │   ├── jobs/                # Job system
-        │   ├── themes/              # Theme system
-        │   ├── i18n/                # Internationalization (RTL, CJK, Unicode)
-        │   ├── revisions/           # Collaborative editing (revision tracking)
-        │   ├── analyzer/            # Document analyzer
-│       ├── repository/          # Repo conversion
-│       ├── docusaurus/          # Docusaurus adapter
-│       ├── mkdocs_/             # MkDocs adapter
-│       ├── sphinx/              # Sphinx adapter
-│       ├── obsidian/            # Obsidian adapter
-│       └── github/              # GitHub Features adapter
-├── tests/                       # 1100+ tests
-├── benchmarks/                  # Benchmark suite
-├── examples/                    # Integration examples + diagram demos
-│   ├── mermaid.md / mermaid.docx
-│   ├── plantuml.md / plantuml.docx
-│   ├── graphviz.md / graphviz.docx
-│   ├── d2.md / d2.docx
-│   ├── sequence.md / sequence.docx
-│   ├── fastapi_app.py
-│   ├── flask_example.py
-│   └── django_example.py
-├── .github/workflows/           # CI/CD
-├── CHANGELOG.md
-├── CONTRIBUTING.md
-├── SECURITY.md
-├── SUPPORT.md
-├── ROADMAP.md
-└── README.md
-```
-
-## Roadmap
-
-### v2.1 ✅ (Released)
-
-- ✅ **EPUB output** — Full EPUB 3.2 renderer implemented
-- ✅ **LaTeX output** — Full LaTeX renderer implemented
-- ✅ **PDF/A** — Archival PDF output (PDF/A-1b, PDF/A-2b)
-- ✅ **i18n** — Internationalization with RTL/CJK/Unicode support
-- ✅ **Collaborative editing** — Revision tracking, comments, annotations
-
-### v2.2
-
-- **Web API** — RESTful API server for document conversion
-- **Documentation site** — Full documentation website at pimd.ai
-- **Plugin marketplace** — Registry of community plugins
-- **Presentation output (PPTX)** — PowerPoint rendering
-
-### v3.0
-
-- **Plugin marketplace** — Package index for community plugins
-- **Distributed builds** — Remote build workers
-- **Webhooks** — Event-driven build pipelines
-- **Collaborative editing UI** — Track changes visualization in outputs
-
-Long-term: PiMD aims to be the standard Python framework for programmatic document generation — reliable, extensible, and production-ready for any publishing workflow.
+## Documentation
+
+| Guide | Location |
+|-------|----------|
+| Full CLI reference | `pimd --help` |
+| Diagram guide | `docs/diagram-guide.md` |
+| Equation guide | `docs/equation-guide.md` |
+| Performance guide | `docs/performance-guide.md` |
+| Scientific publishing | `docs/scientific-publishing-guide.md` |
+| Plugin development | `CONTRIBUTING.md` |
+| Migration from v1.x | `docs/migration-guide.md` |
+| Support & FAQ | `SUPPORT.md` |
 
 ## Contributing
 
-PiMD is an open-source project and welcomes contributions of all kinds.
-
-### How to contribute
-
-1. **Report bugs** — Open a GitHub issue with a minimal reproduction
-2. **Suggest features** — Describe the use case and desired behavior
-3. **Submit pull requests** — Code changes, documentation, tests
-4. **Write plugins** — Build on the Extension SDK
-
-### Development setup
+We welcome contributions. See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, plugin SDK docs, and pull request guidelines.
 
 ```bash
 git clone https://github.com/devasishpal/PiMd.git
@@ -1567,37 +202,6 @@ cd PiMd
 pip install -e ".[dev,all]"
 ```
 
-### Running tests
-
-```bash
-py -m pytest tests/ -v
-```
-
-### Code style
-
-```bash
-ruff check src/ tests/ benchmarks/
-```
-
-### Pull request process
-
-1. Fork the repository
-2. Create a feature branch
-3. Write tests for your changes
-4. Run the full test suite
-5. Run ruff lint
-6. Submit a pull request with a clear description
-
-See `CONTRIBUTING.md` for detailed guidelines, including plugin development documentation.
-
 ## License
 
-PiMD is released under the **MIT License**.
-
-Copyright (c) 2026 PiMD Contributors
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+MIT — see [LICENSE](LICENSE) for details.

@@ -47,6 +47,7 @@ class PiMD:
         plugins: PluginManager | None = None,
         enable_cache: bool = True,
         render_diagrams: bool = True,
+        layout: Any = None,
     ) -> None:
         self._cache: CacheBackend | None
         if cache is not None:
@@ -62,6 +63,7 @@ class PiMD:
             limits=limits,
             plugins=plugins,
             render_diagrams=render_diagrams,
+            layout=layout,
         )
 
     # ======================================================================

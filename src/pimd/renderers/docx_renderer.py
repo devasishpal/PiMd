@@ -5,7 +5,7 @@ from __future__ import annotations
 import io
 from datetime import date
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from docx import Document as DocxDocument
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -53,9 +53,16 @@ logger = get_logger(__name__)
 _MONO_FONT = "Courier New"
 _MONO_SIZE = Pt(8.5)
 _IMAGE_MAX_WIDTH = Cm(14)
-_DIAGRAM_DPI = 300
-_DIAGRAM_WIDTH_FACTOR = 0.75   # use 75% of printable width
-_DIAGRAM_HEIGHT_FACTOR = 0.55  # use 55% of printable height (leaves room for caption)
+
+# Diagram layout constants
+_DIAGRAM_WIDTH_FACTOR = 0.85       # use 85% of printable width
+_DIAGRAM_HEIGHT_FACTOR = 0.75      # use 75% of printable height
+_DIAGRAM_MIN_WIDTH_EMU = int(3 * 914400)  # minimum 3 inches
+_DIAGRAM_SPACE_BEFORE = Pt(10)
+_DIAGRAM_SPACE_AFTER = Pt(8)
+_DIAGRAM_CAPTION_SIZE = Pt(9)
+_DIAGRAM_ERROR_SIZE = Pt(8)
+
 
 
 class DocxRenderer:
@@ -68,9 +75,10 @@ class DocxRenderer:
         Defaults to :class:`ProfessionalTheme`.
     """
 
-    def __init__(self, theme: Theme | None = None) -> None:
+    def __init__(self, theme: Theme | None = None, layout: Any | None = None) -> None:
         self._doc: DocxDocument | None = None
         self._theme: Theme = theme or ProfessionalTheme()
+        self._layout: Any = layout
         self._figure_counter: int = 0
 
     def render(
@@ -112,7 +120,7 @@ class DocxRenderer:
         """
         try:
             self._doc = DocxDocument()
-            apply_layout_to_doc(self._doc)
+            apply_layout_to_doc(self._doc, layout=self._layout)
             self._theme.configure_styles(self._doc)
             self._set_metadata(title, author, company, subject, keywords)
 
@@ -148,7 +156,7 @@ class DocxRenderer:
 
             # Re-apply layout so that any sections added after the initial
             # call (cover, TOC, etc.) inherit the correct orientation & margins
-            apply_layout_to_doc(self._doc)
+            apply_layout_to_doc(self._doc, layout=self._layout)
 
             self._doc.save(str(output_path))
             logger.info("Rendered %s", output_path)
@@ -182,7 +190,7 @@ class DocxRenderer:
         """
         try:
             self._doc = DocxDocument()
-            apply_layout_to_doc(self._doc)
+            apply_layout_to_doc(self._doc, layout=self._layout)
             self._theme.configure_styles(self._doc)
             self._set_metadata(title, author, company, subject, keywords)
 
@@ -211,7 +219,7 @@ class DocxRenderer:
             elif footer_text:
                 self._set_footer(content_section, footer_text)
 
-            apply_layout_to_doc(self._doc)
+            apply_layout_to_doc(self._doc, layout=self._layout)
 
             buf = io.BytesIO()
             self._doc.save(buf)
@@ -453,9 +461,23 @@ class DocxRenderer:
     @staticmethod
     def _add_spans_to_paragraph(p: DocxParagraph, spans: list[Span]) -> None:
         for span in spans:
-            # Math span — inject OMML
-            if span.math and span.omml is not None:
-                p._p.append(span.omml)
+            # Math span — render as PNG via PiDraw
+            if span.math:
+                if span.png:
+                    import io
+
+                    from docx.shared import Inches
+                    try:
+                        run = p.add_run()
+                        run.add_picture(io.BytesIO(span.png), height=Inches(0.3))
+                    except Exception:
+                        run = p.add_run(f"[{span.math}]")
+                        run.font.size = Pt(9)
+                        run.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+                else:
+                    run = p.add_run(f"[{span.math}]")
+                    run.font.size = Pt(9)
+                    run.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
                 continue
 
             text = sanitize_text(span.text)
@@ -489,6 +511,15 @@ class DocxRenderer:
 
     @staticmethod
     def _add_hyperlink(paragraph: DocxParagraph, text: str, url: str) -> None:
+        # Only external (absolute) URLs can be linked in a DOCX.
+        # Relative URLs like /about or #anchor render as plain text.
+        is_external = url.startswith(("http://", "https://", "mailto:", "ftp://"))
+        if not is_external:
+            run = paragraph.add_run(sanitize_text(text))
+            run.font.color.rgb = RGBColor(0x05, 0x63, 0xC1)
+            run.font.underline = True
+            return
+
         part = paragraph.part
         r_id = part.relate_to(
             url,
@@ -709,76 +740,140 @@ class DocxRenderer:
             raise RendererError(f"Failed to insert image {block.url}: {exc}") from exc
 
     # ------------------------------------------------------------------
-    # Diagram
+    # Diagram — Advanced Layout Engine
     # ------------------------------------------------------------------
 
-    def _render_diagram(self, doc: DocxDocument, block: Diagram) -> None:
-        """Embed a rendered diagram into the document with professional formatting.
+    def _get_page_emu(self, doc: DocxDocument) -> tuple[int, int]:
+        """Read printable area from document section in EMU."""
+        section = doc.sections[-1] if doc.sections else None
+        if section:
+            pw = section.page_width
+            ph = section.page_height
+            ml = section.left_margin or Inches(1)
+            mr = section.right_margin or Inches(1)
+            mt = section.top_margin or Inches(1)
+            mb = section.bottom_margin or Inches(1)
+            return int(pw - ml - mr), int(ph - mt - mb)
+        return int(6.27 * 914400), int(9.4 * 914400)
 
-        SVG-first workflow:
-        1. PiDraw renders diagram to SVG
-        2. SVG converted to transparent PNG at 300 DPI for DOCX
-        3. PNG embedded in DOCX with proper sizing, centering, and caption
+    def _get_image_size(self, png_bytes: bytes) -> tuple[int, int]:
+        """Get pixel dimensions of a PNG image."""
+        try:
+            from PIL import Image as PILImage
+            img = PILImage.open(io.BytesIO(png_bytes))
+            return img.size
+        except Exception:
+            return 0, 0
+
+    def _compute_diagram_dimensions(
+        self, pw: int, ph: int, aspect: float
+    ) -> tuple[int, int]:
+        """Compute EMU dimensions from printable area and aspect ratio.
+
+        Strategy:
+        - Fit width first, using 85% of printable width
+        - If resulting height exceeds 75% of printable height, constrain by height
+        - Never crop — always preserve aspect ratio
+        - Enforce minimum width
+        """
+        max_w = int(pw * _DIAGRAM_WIDTH_FACTOR)
+        max_h = int(ph * _DIAGRAM_HEIGHT_FACTOR)
+
+        # Fit by width first
+        w = max_w
+        h = int(w * aspect)
+
+        # If too tall, constrain by height
+        if h > max_h:
+            h = max_h
+            w = int(h / aspect) if aspect > 0 else max_w
+
+        # Enforce minimum
+        if w < _DIAGRAM_MIN_WIDTH_EMU:
+            w = _DIAGRAM_MIN_WIDTH_EMU
+            h = int(w * aspect)
+
+        return int(w), int(h)
+
+    def _render_diagram(self, doc: DocxDocument, block: Diagram) -> None:
+        """Embed a rendered diagram with professional layout.
 
         Features:
-        - Center alignment
-        - Figure numbering (auto-incrementing)
-        - Caption support with bookmark for cross-references
-        - Transparent background PNG
-        - Smart width calculation: fits within page width, preserves aspect ratio
-        - Anti-aliased rendering (via cairosvg at high DPI)
-        - Error placeholder on render failure (never crashes document generation)
+        - Page-break detection: tall diagrams get pushed to next page
+        - Aspect-ratio-preserving fit (never crops)
+        - Transparent PNG background
+        - Auto-incrementing figure numbering with bookmark
+        - Professional caption formatting
+        - Error placeholder when diagram data is missing
         """
         # -- Error placeholder if no image data --
         if not block.png_bytes and not block.svg_bytes:
             self._render_diagram_error(doc, block)
             return
 
-        # -- Use transparent PNG for DOCX (SVG is unreliable in Word) --
         img_data = block.png_bytes or b""
         if not img_data and block.svg_bytes:
             logger.warning("No PNG data for diagram %s, using placeholder", block.language)
             self._render_diagram_error(doc, block)
             return
 
-        # -- Smart sizing: fit within page both width and height --
-        w_emu, h_emu = self._compute_diagram_dimensions(block)
+        # -- Read image dimensions and page geometry --
+        pw_emu, ph_emu = self._get_page_emu(doc)
+        img_pw, img_ph = self._get_image_size(img_data)
 
-        # -- Center-aligned paragraph for the diagram image --
+        # Validate PNG data: if PIL can't read dimensions, treat as error
+        if img_pw == 0 or img_ph == 0:
+            logger.warning("Invalid PNG data for diagram %s, using placeholder", block.language)
+            self._render_diagram_error(doc, block)
+            return
+
+        aspect = img_ph / img_pw
+
+        w_emu, h_emu = self._compute_diagram_dimensions(pw_emu, ph_emu, aspect)
+
+        # -- Page-break detection: if diagram is very tall, start a new page --
+        # Estimated remaining space on current page (rough heuristic)
+        estimated_remaining = ph_emu * 0.4
+        if h_emu > estimated_remaining and h_emu > ph_emu * 0.5:
+            doc.add_page_break()
+
+        # -- Figure numbering --
+        fig_num = block.figure_number
+        if fig_num is None:
+            self._figure_counter += 1
+            fig_num = self._figure_counter
+        else:
+            self._figure_counter = max(self._figure_counter, fig_num)
+
+        # -- Embed image in centered paragraph --
         p = doc.add_paragraph(style="Normal")
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        p.paragraph_format.space_before = Pt(6)
-        p.paragraph_format.space_after = Pt(3)
+        p.paragraph_format.space_before = _DIAGRAM_SPACE_BEFORE
+        p.paragraph_format.space_after = Pt(2)
 
         try:
             img_stream = io.BytesIO(img_data)
-            img_stream.seek(0)
-            inline_shape = p.add_run().add_picture(img_stream, width=Inches(w_emu / 914400))
+            inline_shape = p.add_run().add_picture(
+                img_stream, width=Inches(w_emu / 914400)
+            )
 
-            # Get the figure number (use block's if set, else auto-increment)
-            fig_num = block.figure_number
-            if fig_num is None:
-                self._figure_counter += 1
-                fig_num = self._figure_counter
-            else:
-                self._figure_counter = max(self._figure_counter, fig_num)
-
-            bookmark_id = fig_num + 1000
-            bookmark_name = f"fig_{fig_num}"
-
-            # Override XML extent to exact EMU dimensions (ensures no distortion)
+            # Override XML extent to exact EMU (prevents Word from distorting).
+            # Must also update a:ext inside pic:spPr/a:xfrm so both WP and
+            # DrawingML agree — mismatched extents can cause Word to reject.
             inline = inline_shape._inline
             extent = inline.find(qn("wp:extent"))
             if extent is not None:
                 extent.set("cx", str(w_emu))
                 extent.set("cy", str(h_emu))
 
-            effect_extent = inline.find(qn("wp:effectExtent"))
-            if effect_extent is not None:
-                effect_extent.set("l", "0")
-                effect_extent.set("t", "0")
-                effect_extent.set("r", "0")
-                effect_extent.set("b", "0")
+            # Sync a:xfrm/a:ext with wp:extent
+            xfrm_ext = inline.findall(
+                ".//" + qn("a:ext")
+                + "[@cx][@cy]"
+            )
+            for x_ext in xfrm_ext:
+                x_ext.set("cx", str(w_emu))
+                x_ext.set("cy", str(h_emu))
 
             doc_pr = inline.find(qn("wp:docPr"))
             if doc_pr is not None:
@@ -789,27 +884,30 @@ class DocxRenderer:
 
         except Exception as exc:
             logger.warning("Failed to embed diagram image: %s", exc)
-            self._render_diagram_error(doc, block)
+            self._render_diagram_error(doc, block, fig_num=fig_num)
             return
 
-        # -- Error warning below diagram (rendering continued successfully) --
+        # -- Error warning below diagram (non-fatal) --
         if block.error:
             err_p = doc.add_paragraph(style="Normal")
             err_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            err_p.paragraph_format.space_before = Pt(1)
+            err_p.paragraph_format.space_after = Pt(4)
             err_r = err_p.add_run(sanitize_text(f"Warning: {block.error}"))
             err_r.italic = True
             err_r.font.color.rgb = RGBColor(0xCC, 0x00, 0x00)
-            err_r.font.size = Pt(8)
-            err_p.paragraph_format.space_after = Pt(6)
+            err_r.font.size = _DIAGRAM_ERROR_SIZE
 
-        # -- Caption with figure number, centered below diagram --
+        # -- Caption with figure number --
         if block.caption:
             cap = doc.add_paragraph(style="Normal")
             cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            cap.paragraph_format.space_before = Pt(2)
-            cap.paragraph_format.space_after = Pt(8)
+            cap.paragraph_format.space_before = Pt(4)
+            cap.paragraph_format.space_after = _DIAGRAM_SPACE_AFTER
 
-            # Bookmark start
+            bookmark_id = fig_num + 1000
+            bookmark_name = f"fig_{fig_num}"
+
             bm_start = OxmlElement("w:bookmarkStart")
             bm_start.set(qn("w:id"), str(bookmark_id))
             bm_start.set(qn("w:name"), bookmark_name)
@@ -817,121 +915,69 @@ class DocxRenderer:
 
             caption_text = f"Figure {fig_num}: {block.caption}"
             r = cap.add_run(sanitize_text(caption_text))
-            r.font.size = Pt(9)
+            r.font.size = _DIAGRAM_CAPTION_SIZE
             r.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
             r.italic = True
 
-            # Bookmark end
             bm_end = OxmlElement("w:bookmarkEnd")
             bm_end.set(qn("w:id"), str(bookmark_id))
             cap._p.append(bm_end)
 
-    def _render_diagram_error(self, doc: DocxDocument, block: Diagram) -> None:
+    def _render_diagram_error(
+        self, doc: DocxDocument, block: Diagram, fig_num: int | None = None
+    ) -> None:
         """Render a visible placeholder box when a diagram cannot be rendered.
 
-        Never crashes document generation — inserts a styled placeholder that
-        preserves the document flow and makes the missing diagram visible.
+        Shows diagram source code inside a shaded, dashed-border box
+        so the reader can still see the intended content.
         """
-        # -- Shade the background of the placeholder paragraph --
+        lang = block.language or "?"
         p = doc.add_paragraph(style="Normal")
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        p.paragraph_format.space_before = Pt(8)
-        p.paragraph_format.space_after = Pt(8)
+        p.paragraph_format.space_before = _DIAGRAM_SPACE_BEFORE
+        p.paragraph_format.space_after = Pt(4)
 
         p_props = p._p.get_or_add_pPr()
         shading = OxmlElement("w:shd")
         shading.set(qn("w:val"), "clear")
         shading.set(qn("w:color"), "auto")
-        shading.set(qn("w:fill"), "F2F2F2")
+        shading.set(qn("w:fill"), "F5F5F5")
         p_props.append(shading)
 
-        # Dashed border
         p_bdr = OxmlElement("w:pBdr")
         for side in ("top", "bottom", "left", "right"):
             b = OxmlElement(f"w:{side}")
             b.set(qn("w:val"), "dashed")
             b.set(qn("w:sz"), "6")
-            b.set(qn("w:space"), "6")
-            b.set(qn("w:color"), "999999")
+            b.set(qn("w:space"), "4")
+            b.set(qn("w:color"), "AAAAAA")
             p_bdr.append(b)
         p_props.append(p_bdr)
 
-        # Placeholder text
-        lang = block.language or "?"
-        if block.error and "not supported" in block.error.lower():
+        if block.source:
+            run = p.add_run(f"[{lang} source]\n{block.source}")
+        elif block.error and "not supported" in block.error.lower():
             run = p.add_run(f"[{lang} — diagram engine not available]")
         elif block.error:
             run = p.add_run(f"[{lang} — rendering failed]")
         else:
             run = p.add_run(f"[{lang} — diagram not available]")
+
         run.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
-        run.font.size = Pt(9)
+        run.font.size = _DIAGRAM_ERROR_SIZE
         run.italic = True
 
-        # Add caption below if available
         if block.caption:
             cap = doc.add_paragraph(style="Normal")
             cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
             cap.paragraph_format.space_before = Pt(2)
-            cap.paragraph_format.space_after = Pt(8)
-            fig_num = block.figure_number or 0
-            caption_text = f"Figure {fig_num}: {block.caption}"
+            cap.paragraph_format.space_after = _DIAGRAM_SPACE_AFTER
+            fn = fig_num or block.figure_number or 0
+            caption_text = f"Figure {fn}: {block.caption}"
             r = cap.add_run(sanitize_text(caption_text))
-            r.font.size = Pt(9)
+            r.font.size = _DIAGRAM_CAPTION_SIZE
             r.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
             r.italic = True
-
-    def _compute_diagram_dimensions(self, block: Diagram) -> tuple[int, int]:
-        """Compute diagram width and height in EMU, fitting within page margins.
-
-        Reads the actual section's page width and margins from the live document,
-        then uses the PNG image's own pixel dimensions to derive the exact aspect
-        ratio — guaranteeing zero distortion.  Both width and height are constrained
-        so the diagram never overflows the printable area.
-
-        Returns:
-            (width_emu, height_emu) as integers.
-        """
-        # -- Read actual page dimensions from the live document section --
-        section = self._doc.sections[-1] if self._doc and self._doc.sections else None
-        if section:
-            page_w = section.page_width
-            page_h = section.page_height
-            margin_l = section.left_margin or Inches(1)
-            margin_r = section.right_margin or Inches(1)
-            margin_t = section.top_margin or Inches(1)
-            margin_b = section.bottom_margin or Inches(1)
-            max_w_emu = int(page_w - margin_l - margin_r)
-            max_h_emu = int(page_h - margin_t - margin_b)
-        else:
-            max_w_emu = int(6.27 * 914400)
-            max_h_emu = int(9.4 * 914400)
-
-        # -- Apply sizing factors so diagrams have breathing room --
-        max_w_emu = int(max_w_emu * _DIAGRAM_WIDTH_FACTOR)
-        max_h_emu = int(max_h_emu * _DIAGRAM_HEIGHT_FACTOR)
-
-        # -- Aspect ratio from the actual PNG pixels (guarantees no distortion) --
-        aspect = 0.5625
-        if block.png_bytes:
-            try:
-                from PIL import Image as PILImage
-                img = PILImage.open(io.BytesIO(block.png_bytes))
-                pw, ph = img.size
-                if pw > 0 and ph > 0:
-                    raw = ph / pw
-                    if 0.2 < raw < 5.0:
-                        aspect = raw
-            except Exception:
-                pass
-
-        # -- Fit within bounds, preserving aspect --
-        w = int(min(max_w_emu, max_h_emu / aspect if aspect > 0 else max_w_emu))
-        h = int(w * aspect)
-        if h > max_h_emu:
-            h = max_h_emu
-            w = int(h / aspect) if aspect > 0 else max_w_emu
-        return int(w), int(h)
 
     # ------------------------------------------------------------------
     # Callout / Admonition
@@ -982,23 +1028,36 @@ class DocxRenderer:
 
     @staticmethod
     def _render_equation_block(doc: DocxDocument, block: EquationBlock) -> None:
-        """Render a display equation as OMML (native) or SVG fallback."""
+        """Render a display equation as PNG image (via PiDraw)."""
         p = doc.add_paragraph(style="Normal")
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-        # OMML — native Word equation
-        if block.omml is not None:
-            p._p.append(block.omml)
+        # PNG image from PiDraw renderer
+        if block.png:
+            try:
+                import io
 
-        # Fallback — show LaTeX source (SVG embedding requires future enhancement)
-        elif block.error:
-            run = p.add_run(sanitize_text(f"[Equation Error: {block.error}]"))
-            run.italic = True
-            run.font.color.rgb = RGBColor(0xCC, 0x00, 0x00)
-        else:
-            run = p.add_run(sanitize_text(f"[Equation: {block.latex[:60]}]"))
-            run.italic = True
-            run.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
+                from docx.shared import Inches
+                from PIL import Image as PILImage
+                img = PILImage.open(io.BytesIO(block.png))
+                w, h = img.size
+                ar = h / max(w, 1)
+                display_inches = 5.0
+                run = p.add_run()
+                inline_shape = run.add_picture(io.BytesIO(block.png), width=Inches(display_inches))
+                # Override extent XML to match aspect ratio
+                inline = inline_shape._inline
+                cx = int(display_inches * 914400)
+                cy = int(display_inches * 914400 * ar)
+                extent = inline.find(qn("wp:extent"))
+                if extent is not None:
+                    extent.set("cx", str(cx))
+                    extent.set("cy", str(cy))
+                for x_ext in inline.findall(".//" + qn("a:ext") + "[@cx][@cy]"):
+                    x_ext.set("cx", str(cx))
+                    x_ext.set("cy", str(cy))
+            except Exception:
+                pass
 
         # Equation number (right-aligned)
         if block.number is not None:

@@ -149,7 +149,7 @@ class HtmlRenderer:
         elif isinstance(block, Diagram):
             return self._render_diagram(block)
         elif isinstance(block, EquationBlock):
-            return f'<div class="equation">\\[{escape(block.svg or block.latex)}\\]</div>'
+            return f'<div class="equation">\\[{escape(block.latex)}\\]</div>'
         return ""
 
     @staticmethod

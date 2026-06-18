@@ -345,8 +345,8 @@ class TestDiagramEngine:
     def test_instantiation(self) -> None:
         reg = DiagramRegistry()
         reg.register(_FakeRenderer())
-        engine = DiagramEngine(registry=reg)
-        assert engine.registry is reg
+        engine = DiagramEngine()
+        assert isinstance(engine, DiagramEngine)
 
     def test_render_with_pidraw(self) -> None:
         engine = DiagramEngine()

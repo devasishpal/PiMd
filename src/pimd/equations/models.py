@@ -13,8 +13,7 @@ class EquationResult:
     source: str
     latex: str
     display: bool = False
-    omml: Any = None  # lxml element tree — the OMML XML for native Word
-    svg: str | None = None
+    png: bytes | None = None
     error: str | None = None
     cached: bool = False
     render_time: float = 0.0
@@ -25,19 +24,14 @@ class EquationResult:
 
     @property
     def success(self) -> bool:
-        return self.error is None and (self.omml is not None or self.svg is not None)
-
-    @property
-    def has_omml(self) -> bool:
-        return self.omml is not None
+        return self.error is None and self.png is not None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "source": self.source,
             "latex": self.latex,
             "display": self.display,
-            "has_omml": self.has_omml,
-            "has_svg": self.svg is not None,
+            "has_png": self.png is not None,
             "error": self.error,
             "cached": self.cached,
             "render_time": round(self.render_time, 4),
@@ -54,7 +48,7 @@ class EquationConfig:
 
     enabled: bool = True
     auto_detect: bool = True
-    prefer_omml: bool = True
+    prefer_png: bool = True
     numbering_enabled: bool = True
     max_equations: int = 10000
     label_prefix: str = "eq"
@@ -240,4 +234,6 @@ LATEX_SYMBOL_MAP: dict[str, str] = {
     "dotsb": "⋯",
     "dotsm": "⋯",
     "dotsi": "⋯",
+    "langle": "⟨",
+    "rangle": "⟩",
 }

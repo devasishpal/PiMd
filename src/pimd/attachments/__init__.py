@@ -446,7 +446,7 @@ def svg_to_png(
             output_height=height,
         )
         return True
-    except ImportError:
+    except (ImportError, OSError, AttributeError):
         pass
     except Exception:
         logger.exception("cairosvg conversion failed for %s", svg_path)
@@ -463,7 +463,7 @@ def svg_to_png(
             )
             output_path.write_bytes(png_data)
             return True
-        except ImportError:
+        except (ImportError, OSError, AttributeError):
             pass
 
         try:

@@ -9,16 +9,19 @@ _INVALID_XML_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\uFFFE\uFFFF]")
 
 
 def sanitize_text(text: str) -> str:
-    """Strip XML-invalid control characters from text.
+    """Sanitize text for safe XML/DOCX output.
 
-    Removes characters that are not valid in XML 1.0 documents,
-    such as null bytes, form feeds, and other control characters
-    (except tab ``\\t``, carriage return ``\\r``, and newline ``\\n``).
+    Strips XML-invalid control characters and escapes XML special
+    characters (``&``, ``<``, ``>``) to their entity equivalents.
 
     Args:
         text: The input string to sanitize.
 
     Returns:
-        The sanitized string with invalid characters removed.
+        The sanitized string safe for XML text content.
     """
-    return _INVALID_XML_CHARS.sub("", text)
+    text = _INVALID_XML_CHARS.sub("", text)
+    text = text.replace("&", "&amp;")
+    text = text.replace("<", "&lt;")
+    text = text.replace(">", "&gt;")
+    return text

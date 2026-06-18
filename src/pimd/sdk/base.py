@@ -67,6 +67,10 @@ class BasePlugin(Plugin):
 
     metadata: PluginMetadata
 
+    def attach(self, manager: Any) -> None:
+        """Default no-op implementation so SDK users need not override."""
+        pass
+
     def __init__(self) -> None:
         super().__init__()
         if not self.metadata.name:

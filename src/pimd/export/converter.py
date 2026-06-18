@@ -54,7 +54,8 @@ class ExportConverter:
 
         # Special handling for PDF → produce DOCX first, then convert
         if fmt == ExportFormat.PDF:
-            docx_path = out_dir / f"{inp.stem}_temp.docx"
+            pdf_out = Path(output_path) if output_path else (out_dir / f"{inp.stem}.pdf")
+            docx_path = out_dir / f"{inp.stem}_pdf_temp.docx"
             result = self._convert_to_docx(engine, inp, docx_path, input_ext, opts)
             if not result.success:
                 return result
@@ -63,6 +64,7 @@ class ExportConverter:
                 out_dir,
                 source_format="docx",
                 engine=opts.pdf_engine,
+                output_path=pdf_out,
             )
 
         if fmt == ExportFormat.PDFA:

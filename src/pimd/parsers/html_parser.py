@@ -179,6 +179,13 @@ class HTMLParser:
 
         code = _strip_common_indent(code)
 
+        # Strip common CSS class prefixes from language hint
+        if lang:
+            for prefix in ("language-", "lang-", "code-"):
+                if lang.startswith(prefix):
+                    lang = lang[len(prefix):]
+                    break
+
         return CodeBlock(code=code, language=lang)
 
     def _parse_blockquote(self, tag: Tag) -> Blockquote:

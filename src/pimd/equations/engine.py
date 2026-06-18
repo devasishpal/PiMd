@@ -1,7 +1,6 @@
-"""Equation engine — orchestrates detection, rendering, caching, validation.
+"""Equation engine — detects and renders equations via PiDraw (no OMML).
 
-Auto-detects equations during document conversion and renders them
-to native Word OMML (with SVG fallback).
+All rendering is delegated to PiDraw's HTML→Playwright→PNG pipeline.
 """
 
 from __future__ import annotations
@@ -10,9 +9,7 @@ import time
 from typing import Any
 
 from pimd.equations.cache import EquationCache, MemoryEquationCache
-from pimd.equations.fallback import latex_to_svg
 from pimd.equations.models import EquationConfig, EquationResult
-from pimd.equations.omml import latex_to_omml
 from pimd.equations.parser import clean_latex, is_chemical_formula, normalize_chemical
 from pimd.equations.validation import EquationValidator
 from pimd.utils.logging import get_logger
@@ -21,18 +18,9 @@ logger = get_logger(__name__)
 
 
 class EquationEngine:
-    """Central equation rendering engine.
+    """Central equation rendering engine — PiDraw only, no OMML.
 
-    Orchestrates detection, OMML conversion, SVG fallback, and caching.
-
-    Usage::
-
-        engine = EquationEngine()
-        result = engine.render("E = mc^2")
-        if result.has_omml:
-            # inject result.omml into DOCX paragraph
-        elif result.svg:
-            # embed result.svg as image
+    All rendering goes through PiDraw's HTML→Playwright→PNG pipeline.
     """
 
     def __init__(
@@ -72,11 +60,7 @@ class EquationEngine:
         label: str | None = None,
         force_chemical: bool = False,
     ) -> EquationResult:
-        """Render a single equation.
-
-        Priority:
-          1. OMML (native Word equation) — editable in Word
-          2. SVG fallback — when OMML is not supported
+        """Render a single equation via PiDraw (no OMML).
 
         Args:
             source: LaTeX/MathJax/KaTeX equation source.
@@ -86,7 +70,7 @@ class EquationEngine:
             force_chemical: Treat as chemical formula.
 
         Returns:
-            :class:`EquationResult` with OMML or SVG.
+            :class:`EquationResult` with PNG from PiDraw.
         """
         start = time.monotonic()
 
@@ -120,27 +104,22 @@ class EquationEngine:
             logger.warning("Equation validation failed: %s", result.error)
             return result
 
+        # Render via PiDraw (Playwright → PNG)
+        png: bytes | None = None
         error: str | None = None
-        omml: Any = None
-        svg: str | None = None
-
-        # Render OMML (native Word equation)
         try:
-            omml = latex_to_omml(latex, display=display)
+            from pimd.equations.pidraw_renderer import render_equation
+            eq_result = render_equation(latex, display=display)
+            if eq_result.png:
+                png = eq_result.png
+            elif eq_result.error:
+                error = eq_result.error
         except Exception as exc:
-            logger.debug("OMML conversion failed for '%s': %s", latex, exc)
-            omml = None
+            logger.debug("PiDraw equation rendering failed: %s", exc)
+            error = f"PiDraw rendering failed: {exc}"
 
-        # Fallback to SVG if OMML failed
-        if omml is None:
-            try:
-                svg = latex_to_svg(latex, display=display)
-            except Exception as exc:
-                logger.debug("SVG fallback failed for '%s': %s", latex, exc)
-                svg = None
-
-            if svg is None:
-                error = "Equation rendering failed (OMML and SVG both unavailable)"
+        if png is None and error is None:
+            error = "PiDraw equation rendering returned no output"
 
         # Assign number if display math
         number: int | None = None
@@ -152,8 +131,7 @@ class EquationEngine:
             source=source,
             latex=latex,
             display=display,
-            omml=omml,
-            svg=svg,
+            png=png,
             error=error,
             render_time=time.monotonic() - start,
             label=label,
@@ -166,10 +144,9 @@ class EquationEngine:
             self._cache.set(cache_key, result, ttl=self._config.cache_ttl)
 
         logger.debug(
-            "Rendered equation in %.2fs (OMML=%s, SVG=%s)",
+            "Rendered equation in %.2fs (PNG=%s)",
             result.render_time,
-            result.has_omml,
-            result.svg is not None,
+            result.png is not None,
         )
         return result
 
@@ -210,12 +187,11 @@ class EquationEngine:
 
             latex = _cl(full_text, "latex")
             result = self.render(latex, display=True)
-            if result.has_omml or result.svg:
+            if result.png:
                 eq_block = EquationBlock(
                     latex=latex,
                     display=True,
-                    omml=result.omml,
-                    svg=result.svg,
+                    png=result.png,
                     label=result.label,
                     number=result.number,
                     error=result.error,
@@ -253,20 +229,13 @@ class EquationEngine:
 
                 # Render the equation
                 result = self.render(src, display=is_display, format=fmt)
-                if result.has_omml:
+                if result.png:
                     processed_spans.append(
                         Span(
                             text="",
                             math=src,
                             math_display=is_display,
-                            omml=result.omml,
-                        )
-                    )
-                elif result.svg:
-                    processed_spans.append(
-                        Span(
-                            text=f"[Equation: {src}]",
-                            italic=True,
+                            png=result.png,
                         )
                     )
                 else:
@@ -314,51 +283,32 @@ class EquationEngine:
         """Run diagnostics on equation rendering capabilities."""
         results: list[dict[str, str]] = []
 
-        # OMML check
-        results.append(
-            {
-                "check": "OMML (native Word equations)",
-                "status": "ok",
-                "detail": "Built-in — no external tools required",
-            }
-        )
-
-        # SVG fallback check
+        # PiDraw Playwright check
         try:
-            import matplotlib  # noqa: F401
-
+            from pimd.equations.pidraw_renderer import render_equation
+            test_result = render_equation("E = mc^2", display=False)
+            if test_result.png:
+                results.append(
+                    {
+                        "check": "PiDraw equation renderer",
+                        "status": "ok",
+                        "detail": "PNG rendering works via Playwright",
+                    }
+                )
+            else:
+                results.append(
+                    {
+                        "check": "PiDraw equation renderer",
+                        "status": "warning",
+                        "detail": test_result.error or "Render returned no PNG",
+                    }
+                )
+        except Exception as exc:
             results.append(
                 {
-                    "check": "SVG fallback (matplotlib)",
-                    "status": "ok",
-                    "detail": "Matplotlib available for SVG rendering",
-                }
-            )
-        except ImportError:
-            results.append(
-                {
-                    "check": "SVG fallback (matplotlib)",
-                    "status": "warning",
-                    "detail": "Not installed — pip install matplotlib (recommended)",
-                }
-            )
-
-        # Test OMML conversion
-        test_result = self.render("E = mc^2", display=False)
-        if test_result.has_omml:
-            results.append(
-                {
-                    "check": "OMML conversion test",
-                    "status": "ok",
-                    "detail": f"Rendered in {test_result.render_time:.3f}s",
-                }
-            )
-        else:
-            results.append(
-                {
-                    "check": "OMML conversion test",
-                    "status": "warning",
-                    "detail": "Basic conversion works but had issues",
+                    "check": "PiDraw equation renderer",
+                    "status": "error",
+                    "detail": f"Failed: {exc}",
                 }
             )
 
