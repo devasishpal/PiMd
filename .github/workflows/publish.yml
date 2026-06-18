@@ -9,16 +9,19 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
+      contents: write
       id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -29,3 +32,31 @@ jobs:
       - run: python -m build
 
       - uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          python -c "
+          import re
+          with open('CHANGELOG.md') as f:
+              content = f.read()
+          tag = '${{ github.ref_name }}'
+          version = tag.lstrip('v')
+          pattern = r'## \[' + re.escape(version) + r'\].*?(?=## \[|\Z)'
+          match = re.search(pattern, content, re.DOTALL)
+          if match:
+              text = match.group().strip()
+              with open('release_notes.md', 'w') as out:
+                  out.write(text)
+              print(f'Extracted {len(text)} chars for version {version}')
+          else:
+              print('No changelog section found for version ' + version)
+          "
+
+      - uses: softprops/action-gh-release@v2
+        continue-on-error: true
+        with:
+          body_path: release_notes.md
+          files: |
+            dist/*.whl
+            dist/*.tar.gz
