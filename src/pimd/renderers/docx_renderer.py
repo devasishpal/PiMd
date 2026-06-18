@@ -570,7 +570,6 @@ class DocxRenderer:
     # Blockquote
     # ------------------------------------------------------------------
 
-    @staticmethod
     def _render_blockquote(self, doc: DocxDocument, block: Blockquote) -> None:
         for child in block.children:
             if isinstance(child, Paragraph):
