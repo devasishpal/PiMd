@@ -1407,15 +1407,16 @@ def batch(
     pattern: str = typer.Option("*.md", "--pattern", help="File glob pattern"),
     format: str = typer.Option("docx", "--format", help="Output format"),
     workers: int = typer.Option(4, "--workers", help="Parallel workers"),
-    ctx: typer.Context = None,
 ) -> None:
     """Batch-convert files in a directory (parallel)."""
     show_sub_banner("batch")
 
     # Windows: click expands --pattern *.md to --pattern file1.md file2.md ...
-    # If that happened, ctx.args has the extra expanded files.
+    # If that happened, click.get_current_context().args has the expanded files.
     # Reconstruct the original glob pattern from the first file's suffix.
-    if ctx is not None and ctx.args and not any(c in pattern for c in "*?[!"):
+    import click as _click
+    _ctx = _click.get_current_context(silent=True)
+    if _ctx is not None and _ctx.args and not any(c in pattern for c in "*?[!"):
         suffix = Path(pattern).suffix or ".md"
         pattern = f"*{suffix}"
 
