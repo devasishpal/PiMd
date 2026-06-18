@@ -23,6 +23,10 @@
 - `python-docx` `Run.font` has no `superscript`/`subscript` attribute. Use raw XML: `OxmlElement("w:vertAlign")` with `w:val="superscript"` or `w:val="subscript"`.
 - `w:vertAlign` element must be appended to `rPr` (run properties) via `run._r.get_or_add_rPr()`.
 
+## Class Methods vs Static Methods
+- `@staticmethod` prevents Python from auto-binding `self` — the first parameter receives whatever is passed explicitly, not the instance. If a method needs to call `self.other_method()`, it must be a regular instance method (no `@staticmethod`), not a static method with `self` as a parameter name.
+- When refactoring a `@staticmethod` to call other instance methods, always remove `@staticmethod` — otherwise `TypeError: missing 1 required positional argument` occurs because the instance isn't bound.
+
 ## Git
 - Do not commit or push unless explicitly asked. Stage only intended files; never commit secrets.
 - On Windows, `*.md` globs in PowerShell get expanded by the shell — quote them or use the default pattern.
