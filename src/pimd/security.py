@@ -77,7 +77,10 @@ def verify_toml_manifest(manifest_path: str | Path) -> dict[str, Any]:
 
     Returns dict with keys: valid (bool), errors (list), manifest (dict|None)
     """
-    import tomllib
+    try:
+        import tomllib
+    except ImportError:
+        import tomli as tomllib  # type: ignore[no-redef]
     result: dict[str, Any] = {"valid": False, "errors": [], "manifest": None}
     p = Path(manifest_path)
     if not p.exists():

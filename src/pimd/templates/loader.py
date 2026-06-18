@@ -34,7 +34,10 @@ def _load_meta(path: Path) -> dict[str, Any] | None:
         if meta_file.is_file():
             raw = meta_file.read_text(encoding="utf-8")
             if ext == ".toml":
-                import tomllib  # Python 3.11+
+                try:
+                    import tomllib
+                except ImportError:
+                    import tomli as tomllib  # type: ignore[no-redef]
 
                 return dict(tomllib.loads(raw))
             return dict(json.loads(raw))

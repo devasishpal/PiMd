@@ -29,7 +29,10 @@ class BrandingManager:
 
                     data: dict[str, Any] = json.load(f)
                 elif path.suffix in (".toml", ".tml"):
-                    import tomllib
+                    try:
+                        import tomllib
+                    except ImportError:
+                        import tomli as tomllib  # type: ignore[no-redef]
 
                     data = tomllib.load(f)
                 else:

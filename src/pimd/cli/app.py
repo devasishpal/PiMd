@@ -1298,7 +1298,10 @@ def book_compile(
     show_sub_banner("book compile")
     import json
 
-    import tomllib
+    try:
+        import tomllib
+    except ImportError:
+        import tomli as tomllib  # type: ignore[no-redef]
 
     raw = config.read_text(encoding="utf-8")
     data = json.loads(raw) if config.suffix == ".json" else tomllib.loads(raw)
@@ -2087,7 +2090,10 @@ def build(
     elif suffix == ".json":
         data = json.loads(raw)
     elif suffix in (".toml", ".tml"):
-        import tomllib
+        try:
+            import tomllib
+        except ImportError:
+            import tomli as tomllib  # type: ignore[no-redef]
         data = tomllib.loads(raw)
     else:
         display_error("Unsupported config", f"Format '{suffix}' not supported")
