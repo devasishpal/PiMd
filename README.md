@@ -12,6 +12,7 @@
   <a href="https://pypi.org/project/pimd/"><img src="https://img.shields.io/pypi/v/pimd" alt="PyPI"></a>
   <a href="https://pypi.org/project/pimd/"><img src="https://img.shields.io/pypi/pyversions/pimd" alt="Python Versions"></a>
   <a href="https://pypi.org/project/pimd/"><img src="https://img.shields.io/pypi/dm/pimd" alt="Downloads"></a>
+  <a href="https://pepy.tech/project/pimd"><img src="https://static.pepy.tech/badge/pimd" alt="Total Downloads"></a>
   <a href="https://github.com/devasishpal/PiMd/actions"><img src="https://img.shields.io/github/actions/workflow/status/devasishpal/PiMd/ci.yml?branch=main" alt="Build"></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
 </p>
