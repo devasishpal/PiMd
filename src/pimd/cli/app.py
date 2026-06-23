@@ -105,6 +105,7 @@ def _run_conversion(
     input_format: str,
     **kwargs: object,
 ) -> None:
+    reference_doc = kwargs.pop("reference_doc", None)
     steps = StepDisplay()
     steps.add("Reading file")
     steps.add("Parsing")
@@ -159,7 +160,16 @@ def _run_conversion(
                 display_error("Template error", str(exc))
                 raise typer.Exit(code=1) from exc
 
-        engine = PiMD(enable_cache=False, render_diagrams=True, layout=layout)
+            # Auto-load template reference doc if no explicit --reference-doc given
+            if not reference_doc:
+                ref_path = ts.get_reference_doc_path(template_name)
+                if ref_path is not None:
+                    reference_doc = str(ref_path)
+
+        ref_doc_kwargs = {}
+        if reference_doc:
+            ref_doc_kwargs["reference_doc"] = reference_doc
+        engine = PiMD(enable_cache=False, render_diagrams=True, layout=layout, **ref_doc_kwargs)
         steps.succeed("Reading file")
 
         config = load_config()
@@ -268,6 +278,11 @@ def md(
         "--diagrams",
         help="Alias for --render-diagrams",
     ),
+    reference_doc: str | None = typer.Option(
+        None,
+        "--reference-doc",
+        help="Path to a reference .docx file to use as style template",
+    ),
     template: str | None = typer.Option(
         None,
         "--template",
@@ -299,6 +314,7 @@ def md(
         keywords=kw,
         doc_version=doc_version,
         render_diagrams=rd,
+        reference_doc=reference_doc,
         template=template,
     )
 
@@ -353,6 +369,11 @@ def html(
         "--diagrams",
         help="Alias for --render-diagrams",
     ),
+    reference_doc: str | None = typer.Option(
+        None,
+        "--reference-doc",
+        help="Path to a reference .docx file to use as style template",
+    ),
     template: str | None = typer.Option(
         None,
         "--template",
@@ -384,6 +405,7 @@ def html(
         keywords=kw,
         doc_version=doc_version,
         render_diagrams=rd,
+        reference_doc=reference_doc,
         template=template,
     )
 
@@ -1011,6 +1033,118 @@ def template_validate(
         console.print(f"[yellow]![/] {w}")
     for e in result.errors:
         console.print(f"[red]X[/] {e}")
+
+
+@templates_app.command(name="install")
+def template_install(
+    archive: Path = typer.Argument(
+        ...,
+        help="Path to a template .zip archive",
+        exists=True,
+        dir_okay=False,
+    ),
+) -> None:
+    """Install a packaged template from a .zip file."""
+    show_sub_banner(f"template install [cyan]{archive.name}[/]")
+    from pimd.templates.docx_reference import install_template_package
+
+    try:
+        dest = install_template_package(archive)
+        console.print(f"[green]Y[/] Template installed to {dest}")
+    except Exception as exc:
+        display_error("Install failed", str(exc))
+        raise typer.Exit(code=1) from exc
+
+
+@templates_app.command(name="inspect")
+def template_inspect(
+    path: Path = typer.Argument(
+        ...,
+        help="Path to a .docx template file to inspect",
+        exists=True,
+        dir_okay=False,
+    ),
+) -> None:
+    """Inspect a DOCX template file — show styles, headers, footers, layout."""
+    show_sub_banner(f"template inspect [cyan]{path.name}[/]")
+    from pimd.templates.docx_reference import ReferenceDoc
+
+    try:
+        ref = ReferenceDoc(path)
+        info = ref.inspect()
+
+        from rich.table import Table
+
+        # Header
+        console.print(f"\n[bold]Template:[/] {path.name}")
+        console.print(f"[bold]Path:[/] {info['path']}")
+
+        # Page settings
+        ps = info["page_settings"]
+        if ps:
+            console.print(
+                f"\n[bold]Page:[/] {ps.get('page_width', '?')}mm x {ps.get('page_height', '?')}mm "
+                f"({ps.get('orientation', 'portrait')})"
+            )
+            console.print(
+                f"[bold]Margins:[/] T={ps.get('top_margin', '?')}mm "
+                f"B={ps.get('bottom_margin', '?')}mm "
+                f"L={ps.get('left_margin', '?')}mm "
+                f"R={ps.get('right_margin', '?')}mm"
+            )
+
+        # Sections
+        if info["sections"]:
+            console.print(f"\n[bold]Sections:[/] {len(info['sections'])}")
+            for i, sec in enumerate(info["sections"]):
+                console.print(
+                    f"  [{i}] {sec.get('page_width', '?')}mm x {sec.get('page_height', '?')}mm "
+                    f"({sec.get('orientation', 'portrait')})"
+                )
+
+        # Styles
+        styles = info["styles"]
+        console.print(f"\n[bold]Styles:[/] {info['style_count']}")
+        if styles:
+            style_table = Table(show_header=False, box=None, padding=(0, 2))
+            cols = 4
+            rows = [styles[i:i + cols] for i in range(0, len(styles), cols)]
+            for row in rows:
+                padded = [f"[cyan]{s}[/]" for s in row]
+                while len(padded) < cols:
+                    padded.append("")
+                style_table.add_row(*padded)
+            console.print(style_table)
+
+        # Headers
+        if info["headers"] and any(h for h in info["headers"]):
+            console.print(f"\n[bold]Headers:[/] {len(info['headers'])} section(s)")
+            for i, h in enumerate(info["headers"]):
+                if h.strip():
+                    console.print(f"  [{i}] {h.strip()[:120]}")
+
+        # Footers
+        if info["footers"] and any(f for f in info["footers"]):
+            console.print(f"\n[bold]Footers:[/] {len(info['footers'])} section(s)")
+            for i, f in enumerate(info["footers"]):
+                if f.strip():
+                    console.print(f"  [{i}] {f.strip()[:120]}")
+
+        # Numbering
+        num_count = info["numbering_definitions"]
+        console.print(f"\n[bold]Numbering definitions:[/] {num_count}")
+
+        # Metadata
+        meta = info["metadata"]
+        if meta:
+            console.print("\n[bold]Metadata:[/]")
+            for k, v in meta.items():
+                if v:
+                    console.print(f"  {k}: {v}")
+
+    except Exception as exc:
+        display_error("Inspection failed", str(exc))
+        raise typer.Exit(code=1) from exc
 
 
 # ======================================================================

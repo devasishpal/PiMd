@@ -48,6 +48,7 @@ class PiMD:
         enable_cache: bool = True,
         render_diagrams: bool = True,
         layout: Any = None,
+        reference_doc: str | Path | None = None,
     ) -> None:
         self._cache: CacheBackend | None
         if cache is not None:
@@ -56,6 +57,7 @@ class PiMD:
             self._cache = MemoryCache(default_ttl=300)
         else:
             self._cache = None
+        self._reference_doc = reference_doc
 
         self._service = ConversionService(
             theme=theme,
@@ -64,6 +66,7 @@ class PiMD:
             plugins=plugins,
             render_diagrams=render_diagrams,
             layout=layout,
+            reference_doc=reference_doc,
         )
 
     # ======================================================================

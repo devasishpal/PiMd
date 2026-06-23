@@ -89,9 +89,15 @@ class ConversionService:
         equation_engine: Any = None,
         render_diagrams: bool = True,
         layout: Any = None,
+        reference_doc: str | Path | None = None,
     ) -> None:
         self._theme = theme or ProfessionalTheme()
-        self._renderer = DocxRenderer(self._theme, layout=layout)
+        self._reference_doc = reference_doc
+        self._renderer = DocxRenderer(
+            self._theme,
+            layout=layout,
+            reference_doc=reference_doc,
+        )
         self._cache = cache
         self._guard = SafetyGuard(limits)
         self._plugins = plugins or PluginManager()
@@ -249,7 +255,11 @@ class ConversionService:
     def _render_to_bytes(self, document: Document, **options: Any) -> bytes:
         from pimd.renderers.docx_renderer import DocxRenderer as _DocxRenderer
 
-        renderer = _DocxRenderer(self._theme, layout=self._renderer._layout)
+        renderer = _DocxRenderer(
+            self._theme,
+            layout=self._renderer._layout,
+            reference_doc=self._reference_doc,
+        )
         return renderer.render_to_bytes(document, **options)
 
     def _process_diagrams(self, document: Document) -> None:

@@ -5,10 +5,15 @@ All notable changes to PiMD are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.2.4] - 2026-06-18
+## [2.2.4] - 2026-06-23
+
+### Added
+
+- **Reference DOCX template system**: Pandoc-style `--reference-doc` support for DOCX output. New `ReferenceDoc` class loads/validates/extracts styles from a `.docx` template. New `StyleMapper` for element-to-style mapping with override support. CLI `--reference-doc` flag on `md`/`html` commands, plus `template inspect` and `template install` commands. Threaded through PiMD API → ConversionService → renderer with zero backward compatibility impact. (154 tests, all passing.)
 
 ### Fixed
 
+- **Theme style conflict**: `ProfessionalTheme` now gracefully handles pre-existing "Code Block" and "Blockquote" styles instead of raising `ValueError` on `add_style()`.
 - **DOCX blockquote regression**: Removed `@staticmethod` from `_render_blockquote` which caused `TypeError: missing 1 required positional argument: 'block'` when blockquotes contained block types other than paragraphs. (`AGENTS.md` lesson added.)
 - **Version sync**: `__version__` in `__init__.py` now matches `pyproject.toml`.
 - **cairosvg**: Added as core dependency (`cairosvg>=2.7.0`) for reliable SVG-to-PNG conversion.

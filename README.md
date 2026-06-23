@@ -29,7 +29,7 @@ PiMD fills a unique niche — it is the only Markdown-to-DOCX engine with built-
 | Feature | PiMD | Pandoc | MkDocs | Sphinx | Quarto | Typst |
 |---------|------|--------|--------|--------|--------|-------|
 | **DOCX output** | ✅ Professional typography, TOC, cross-refs, page numbers, watermarks | ✅ Basic (pandoc-crossref for references) | ❌ | ❌ | ❌ | ⚠️ Experimental |
-| **DOCX templates** | ✅ 10 presets + inheritance + custom | ✅ Custom reference-docx | ❌ | ❌ | ❌ | ❌ |
+| **DOCX templates** | ✅ 10 presets + inheritance + custom + reference-docx | ✅ Custom reference-docx | ❌ | ❌ | ❌ | ❌ |
 | **EPUB 3.2** | ✅ Full support, TOC, MathML, SVG | ✅ EPUB 2/3 | ❌ | ❌ | ✅ | ❌ |
 | **PDF/A archival** | ✅ Native (fpdf2) | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **LaTeX output** | ✅ Clean, compilable .tex | ✅ Native LaTeX | ❌ | ✅ Native | ✅ | ❌ |
@@ -70,7 +70,7 @@ PiMD fills a unique niche — it is the only Markdown-to-DOCX engine with built-
 - **Publish-ready DOCX** — professional typography, templates, watermarks, TOC, cross-references
 - **Diagrams** — Mermaid, PlantUML, Graphviz, D2, BlockDiag, Vega, ASCII — powered by [PiDraw](https://pypi.org/project/pidraw/)
 - **Equations** — LaTeX into native Word OMML, MathJax, or SVG
-- **Templates** — 10 presets (academic, business, book, resume, invoice…) with inheritance
+- **Templates** — 10 presets (academic, business, book, resume, invoice…) with inheritance, plus Pandoc-style reference DOCX support
 - **Multi-format** — DOCX, EPUB 3.2, LaTeX, PDF/A, HTML, Markdown, TXT
 - **Python API** — first-class library for FastAPI, Flask, Django
 - **Plugin system** — 9 typed plugin types with SDK, hooks, and event bus
@@ -120,6 +120,12 @@ engine.md_to_docx(
     page_numbers=True,
     render_diagrams=True,
 )
+
+# With a reference DOCX for custom styles/headers/footers
+engine.md_to_docx(
+    "report.md", "report.docx",
+    reference_doc="company-template.docx",
+)
 ```
 
 ### CLI
@@ -134,6 +140,12 @@ pimd latex paper.md paper.tex
 
 # Use a template
 pimd md report.md report.docx --template academic
+
+# Use a reference DOCX for custom styles/headers/footers
+pimd md report.md report.docx --reference-doc company-template.docx
+
+# Inspect styles in a reference DOCX
+pimd template inspect company-template.docx
 
 # Batch convert a directory
 pimd batch ./docs --output ./build

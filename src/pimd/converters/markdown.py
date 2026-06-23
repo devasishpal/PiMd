@@ -4,6 +4,7 @@ All diagram rendering is delegated to PiDraw.
 """
 
 from pathlib import Path
+from typing import Any
 
 from pimd.diagrams import DiagramEngine
 from pimd.diagrams.pidraw_integration import (
@@ -13,6 +14,7 @@ from pimd.equations import EquationEngine
 from pimd.equations.cache import MemoryEquationCache
 from pimd.equations.models import EquationConfig
 from pimd.exceptions import ConversionError
+from pimd.frontmatter import parse_frontmatter, strip_frontmatter
 from pimd.models import (
     Block,
     Blockquote,
@@ -59,9 +61,15 @@ class MarkdownConverter:
         theme: Theme | None = None,
         diagram_engine: DiagramEngine | None = None,
         equation_engine: EquationEngine | None = None,
+        reference_doc: str | Path | None = None,
+        style_map: dict[str, str] | None = None,
     ) -> None:
         self._parser = MarkdownParser()
-        self._renderer = DocxRenderer(theme or ProfessionalTheme())
+        self._renderer = DocxRenderer(
+            theme or ProfessionalTheme(),
+            reference_doc=reference_doc,
+            style_map=style_map,
+        )
         self._statistics: DocumentStatistics = DocumentStatistics()
         self._diagram_engine = diagram_engine or _default_diagram_engine()
         self._equation_engine = equation_engine or _default_equation_engine()
@@ -86,6 +94,8 @@ class MarkdownConverter:
         subject: str | None = None,
         keywords: list[str] | None = None,
         doc_version: str | None = None,
+        reference_doc: str | Path | None = None,
+        style_map: dict[str, str] | None = None,
     ) -> None:
         """Convert a Markdown file to a DOCX document.
 
@@ -103,6 +113,8 @@ class MarkdownConverter:
             subject: Document subject (metadata).
             keywords: List of keywords (metadata).
             doc_version: Version string shown on the cover page.
+            reference_doc: Path to a reference ``.docx`` to use as template.
+            style_map: Custom style name overrides.
 
         Raises:
             ConversionError: If the input file does not exist or conversion fails.
@@ -116,7 +128,10 @@ class MarkdownConverter:
 
         print("Parsing\u2026")
         content = src.read_text(encoding="utf-8")
-        document = self._parser.parse(content)
+        body, metadata = self._strip_and_parse_frontmatter(content)
+        title = title or metadata.title
+        author = author or metadata.author
+        document = self._parser.parse(body)
         self._process_diagrams(document)
         self._process_equations(document)
 
@@ -133,9 +148,11 @@ class MarkdownConverter:
             title=title,
             author=author,
             company=company,
-            subject=subject,
-            keywords=keywords,
+            subject=subject or metadata.subject,
+            keywords=keywords or metadata.keywords,
             doc_version=doc_version,
+            reference_doc=reference_doc,
+            style_map=style_map,
         )
 
         print("Done.")
@@ -156,6 +173,8 @@ class MarkdownConverter:
         subject: str | None = None,
         keywords: list[str] | None = None,
         doc_version: str | None = None,
+        reference_doc: str | Path | None = None,
+        style_map: dict[str, str] | None = None,
     ) -> None:
         """Convert a Markdown string directly to a DOCX document.
 
@@ -165,7 +184,10 @@ class MarkdownConverter:
         print("Converting Markdown\u2026")
 
         print("Parsing\u2026")
-        document = self._parser.parse(markdown_text)
+        body, metadata = self._strip_and_parse_frontmatter(markdown_text)
+        title = title or metadata.title
+        author = author or metadata.author
+        document = self._parser.parse(body)
         self._process_diagrams(document)
         self._process_equations(document)
 
@@ -182,9 +204,11 @@ class MarkdownConverter:
             title=title,
             author=author,
             company=company,
-            subject=subject,
-            keywords=keywords,
+            subject=subject or metadata.subject,
+            keywords=keywords or metadata.keywords,
             doc_version=doc_version,
+            reference_doc=reference_doc,
+            style_map=style_map,
         )
 
         print("Done.")
@@ -192,6 +216,23 @@ class MarkdownConverter:
     # ------------------------------------------------------------------
     # Diagram processing — delegated to PiDraw
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _strip_and_parse_frontmatter(content: str) -> tuple[str, Any]:
+        """Strip YAML/TOML/JSON frontmatter and return (body, metadata).
+
+        If no frontmatter is found, returns (content, empty Metadata).
+        """
+        from pimd.frontmatter import Metadata
+
+        try:
+            body = strip_frontmatter(content)
+            meta = parse_frontmatter(content)
+        except Exception:
+            return content, Metadata()
+        if body == content:
+            return content, Metadata()
+        return body, meta
 
     def _process_diagrams(self, document: Document) -> None:
         """Walk document and render diagram blocks using PiDraw."""

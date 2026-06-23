@@ -25,6 +25,11 @@ Enterprise features::
     from pimd.config import Config
 """
 
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
 from pimd.accessibility import AccessibilityEngine, AccessibilityReport
 from pimd.analyzer import AnalysisIssue, AnalysisReport, ProjectAnalyzer
 from pimd.api import PiMD
@@ -182,7 +187,18 @@ from pimd.sdk import (
 from pimd.security import SafeSubprocess, safe_temp_dir, sanitize_svg, sanitize_svg_file, scan_for_secrets, verify_plugin_hash, verify_toml_manifest
 from pimd.sphinx import RSTtoMarkdownConverter, SphinxConfig, SphinxProject, SphinxProjectConverter
 from pimd.streaming import ChunkProcessor, LargeFileHandler, StreamingMarkdownReader
-from pimd.templates import Template, TemplateConfig, TemplateManager, TemplateType
+from pimd.templates import (
+    DEFAULT_STYLE_MAP,
+    ReferenceDoc,
+    ReferenceDocError,
+    StyleMapper,
+    Template,
+    TemplateConfig,
+    TemplateManager,
+    TemplateType,
+    get_available_styles,
+    validate_reference_doc,
+)
 from pimd.themes import ProfessionalTheme, Theme
 from pimd.validation import DocumentValidator
 
@@ -262,6 +278,12 @@ __all__ = [
     "Template",
     "TemplateConfig",
     "TemplateType",
+    "ReferenceDoc",
+    "ReferenceDocError",
+    "StyleMapper",
+    "DEFAULT_STYLE_MAP",
+    "get_available_styles",
+    "validate_reference_doc",
     # Branding
     "BrandingManager",
     "Brand",
@@ -452,11 +474,18 @@ __author__ = "PiMD Contributors"
 __description__ = "Professional document publishing platform"
 
 
-def md_to_docx(input_file: str, output_file: str) -> None:
+def md_to_docx(
+    input_file: str,
+    output_file: str,
+    reference_doc: str | Path | None = None,
+    **kwargs: Any,
+) -> None:
     """Convenience function — convert a Markdown file to DOCX in one call.
 
     Args:
         input_file: Path to the input ``.md`` file.
         output_file: Path where the output ``.docx`` will be written.
+        reference_doc: Path to a reference ``.docx`` to use as template.
+        **kwargs: Additional options passed to :class:`MarkdownConverter`.
     """
-    MarkdownConverter().convert(input_file, output_file)
+    MarkdownConverter(reference_doc=reference_doc).convert(input_file, output_file, **kwargs)

@@ -63,6 +63,22 @@ _DIAGRAM_SPACE_AFTER = Pt(8)
 _DIAGRAM_CAPTION_SIZE = Pt(9)
 _DIAGRAM_ERROR_SIZE = Pt(8)
 
+# Default Markdown → DOCX style mapping
+# Used when a reference document is provided.
+STYLE_MAP: dict[str, str] = {
+    "h1": "Heading 1",
+    "h2": "Heading 2",
+    "h3": "Heading 3",
+    "h4": "Heading 4",
+    "h5": "Heading 5",
+    "h6": "Heading 6",
+    "paragraph": "Normal",
+    "blockquote": "Blockquote",
+    "code": "Code Block",
+    "table": "Table Grid",
+    "caption": "Caption",
+}
+
 
 
 class DocxRenderer:
@@ -73,13 +89,78 @@ class DocxRenderer:
     theme : Theme, optional
         Visual theme that controls typography, colours, and spacing.
         Defaults to :class:`ProfessionalTheme`.
+    reference_doc : str | Path | None, optional
+        Path to a reference ``.docx`` file whose styles, headers, footers,
+        and page layout are used as a starting point (Pandoc-style).
+    style_map : dict[str, str] | None, optional
+        Custom mapping of Markdown element names to DOCX style names.
+        Merged over the default style map.
     """
 
-    def __init__(self, theme: Theme | None = None, layout: Any | None = None) -> None:
+    def __init__(
+        self,
+        theme: Theme | None = None,
+        layout: Any | None = None,
+        reference_doc: str | Path | None = None,
+        style_map: dict[str, str] | None = None,
+    ) -> None:
         self._doc: DocxDocument | None = None
         self._theme: Theme = theme or ProfessionalTheme()
         self._layout: Any = layout
         self._figure_counter: int = 0
+        self._reference_doc_path: str | Path | None = reference_doc
+        self._style_map: dict[str, str] = dict(STYLE_MAP)
+        if style_map:
+            self._style_map.update(style_map)
+
+    # ------------------------------------------------------------------
+    # Reference-document helpers
+    # ------------------------------------------------------------------
+
+    def _create_document(self, reference_doc: str | Path | None = None) -> DocxDocument:
+        """Create a new DOCX document, optionally based on a reference doc.
+
+        If ``reference_doc`` is provided (or was set via constructor), the
+        new document inherits its styles, headers, footers, and page layout.
+        Otherwise a blank document is created (default python-docx behaviour).
+        """
+        ref = reference_doc or self._reference_doc_path
+        if ref is not None:
+            ref_path = Path(ref)
+            if ref_path.exists():
+                logger.info("Using reference DOCX: %s", ref_path)
+                return DocxDocument(str(ref_path))
+            logger.warning("Reference DOCX not found, falling back to blank: %s", ref_path)
+        return DocxDocument()
+
+    def get_style_map(self) -> dict[str, str]:
+        """Return the current style map (default + user overrides)."""
+        return dict(self._style_map)
+
+    def set_style_map(self, style_map: dict[str, str]) -> None:
+        """Override the style map with a custom mapping."""
+        self._style_map.update(style_map)
+
+    def style_for(self, element: str) -> str | None:
+        """Return the DOCX style name for a Markdown element, or ``None``.
+
+        Checks whether the style exists in the current document before
+        returning it, so callers can safely fall back.
+        """
+        style_name = self._style_map.get(element)
+        if style_name is None:
+            return None
+        if self._doc is not None:
+            try:
+                _ = self._doc.styles[style_name]
+                return style_name
+            except (KeyError, AttributeError):
+                pass
+        return style_name
+
+    # ------------------------------------------------------------------
+    # Render
+    # ------------------------------------------------------------------
 
     def render(
         self,
@@ -97,6 +178,8 @@ class DocxRenderer:
         subject: str | None = None,
         keywords: list[str] | None = None,
         doc_version: str | None = None,
+        reference_doc: str | Path | None = None,
+        style_map: dict[str, str] | None = None,
     ) -> None:
         """Render a :class:`Document` to a ``.docx`` file.
 
@@ -114,12 +197,16 @@ class DocxRenderer:
             subject: Document subject (metadata only).
             keywords: List of keywords (metadata only).
             doc_version: Version string shown on the cover page.
+            reference_doc: Path to a reference ``.docx`` to use as template.
+            style_map: Custom style name mappings.
 
         Raises:
             RendererError: If rendering fails.
         """
         try:
-            self._doc = DocxDocument()
+            if style_map:
+                self._style_map.update(style_map)
+            self._doc = self._create_document(reference_doc or self._reference_doc_path)
             apply_layout_to_doc(self._doc, layout=self._layout)
             self._theme.configure_styles(self._doc)
             self._set_metadata(title, author, company, subject, keywords)
@@ -180,6 +267,8 @@ class DocxRenderer:
         subject: str | None = None,
         keywords: list[str] | None = None,
         doc_version: str | None = None,
+        reference_doc: str | Path | None = None,
+        style_map: dict[str, str] | None = None,
     ) -> bytes:
         """Render a :class:`Document` to DOCX bytes without writing to disk.
 
@@ -189,7 +278,9 @@ class DocxRenderer:
             The DOCX file contents as ``bytes``.
         """
         try:
-            self._doc = DocxDocument()
+            if style_map:
+                self._style_map.update(style_map)
+            self._doc = self._create_document(reference_doc or self._reference_doc_path)
             apply_layout_to_doc(self._doc, layout=self._layout)
             self._theme.configure_styles(self._doc)
             self._set_metadata(title, author, company, subject, keywords)

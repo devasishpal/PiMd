@@ -38,6 +38,11 @@ class TemplateService:
             "academic": ("Academic paper template", TemplateType.ACADEMIC),
             "business": ("Business report template", TemplateType.BUSINESS),
             "book": ("Book manuscript template", TemplateType.BOOK),
+            "invoice": ("Professional invoice template", TemplateType.INVOICE),
+            "api": ("API documentation template", TemplateType.API),
+            "manual": ("Technical user manual template", TemplateType.MANUAL),
+            "proposal": ("Business proposal template", TemplateType.PROPOSAL),
+            "resume": ("Professional resume template", TemplateType.RESUME),
         }
         for name, (desc, ttype) in builtins.items():
             self._templates[name] = Template(
@@ -79,6 +84,18 @@ class TemplateService:
         """Return the file path for a named template, if one exists."""
         tmpl = self._templates.get(name)
         return tmpl.docx_template_path if tmpl else None
+
+    def get_reference_doc_path(self, name: str) -> Path | None:
+        """Return the reference doc path for a built-in template preset, if one exists.
+
+        Checks for ``reference.docx`` in the preset directory.
+        """
+        preset_dir = Path(__file__).resolve().parent.parent / "templates" / "presets" / name
+        if preset_dir.is_dir():
+            ref_path = preset_dir / "reference.docx"
+            if ref_path.exists():
+                return ref_path
+        return None
 
     def apply_template(
         self,

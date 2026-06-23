@@ -28,9 +28,18 @@ class HTMLConverter:
         Visual theme for the generated DOCX. Defaults to ProfessionalTheme.
     """
 
-    def __init__(self, theme: Theme | None = None) -> None:
+    def __init__(
+        self,
+        theme: Theme | None = None,
+        reference_doc: str | Path | None = None,
+        style_map: dict[str, str] | None = None,
+    ) -> None:
         self._parser = HTMLParser()
-        self._renderer = DocxRenderer(theme or ProfessionalTheme())
+        self._renderer = DocxRenderer(
+            theme or ProfessionalTheme(),
+            reference_doc=reference_doc,
+            style_map=style_map,
+        )
         self._statistics: DocumentStatistics = DocumentStatistics()
 
     # ------------------------------------------------------------------
@@ -53,6 +62,8 @@ class HTMLConverter:
         subject: str | None = None,
         keywords: list[str] | None = None,
         doc_version: str | None = None,
+        reference_doc: str | Path | None = None,
+        style_map: dict[str, str] | None = None,
     ) -> None:
         """Convert an HTML file to a DOCX document.
 
@@ -70,6 +81,8 @@ class HTMLConverter:
             subject: Document subject (metadata).
             keywords: List of keywords (metadata).
             doc_version: Version string shown on the cover page.
+            reference_doc: Path to a reference ``.docx`` to use as template.
+            style_map: Custom style name overrides.
 
         Raises:
             ConversionError: If the input file does not exist or conversion fails.
@@ -97,6 +110,8 @@ class HTMLConverter:
             subject=subject,
             keywords=keywords,
             doc_version=doc_version,
+            reference_doc=reference_doc,
+            style_map=style_map,
         )
 
     def convert_text(
@@ -115,6 +130,8 @@ class HTMLConverter:
         subject: str | None = None,
         keywords: list[str] | None = None,
         doc_version: str | None = None,
+        reference_doc: str | Path | None = None,
+        style_map: dict[str, str] | None = None,
     ) -> None:
         """Convert an HTML string directly to a DOCX document.
 
@@ -138,6 +155,8 @@ class HTMLConverter:
             subject=subject,
             keywords=keywords,
             doc_version=doc_version,
+            reference_doc=reference_doc,
+            style_map=style_map,
         )
 
     def get_statistics(self) -> DocumentStatistics:

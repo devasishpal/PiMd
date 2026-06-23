@@ -92,7 +92,10 @@ class ProfessionalTheme(Theme):
 
     @staticmethod
     def _add_code_style(doc: DocxDocument) -> None:
-        style = doc.styles.add_style("Code Block", WD_STYLE_TYPE.PARAGRAPH)
+        try:
+            style = doc.styles["Code Block"]
+        except KeyError:
+            style = doc.styles.add_style("Code Block", WD_STYLE_TYPE.PARAGRAPH)
         style.font.name = _MONO_FONT
         style.font.size = _MONO_SIZE
         style.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
@@ -114,7 +117,10 @@ class ProfessionalTheme(Theme):
 
     @staticmethod
     def _add_blockquote_style(doc: DocxDocument) -> None:
-        style = doc.styles.add_style("Blockquote", WD_STYLE_TYPE.PARAGRAPH)
+        try:
+            style = doc.styles["Blockquote"]
+        except KeyError:
+            style = doc.styles.add_style("Blockquote", WD_STYLE_TYPE.PARAGRAPH)
         style.font.name = _BODY_FONT
         style.font.size = _BODY_SIZE
         style.font.italic = True
